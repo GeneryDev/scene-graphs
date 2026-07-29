@@ -4,7 +4,15 @@ extends GraphNode
 func setup(saved_data : Dictionary, editor : SignalGraphEditor) -> bool:
 	title = "One-Shot";
 	add_child(Label.new());
-	set_slot(0, true, SignalGraphEditor.PORT_TYPE_SIGNAL, Color.WHITE, true, SignalGraphEditor.PORT_TYPE_SIGNAL, Color.WHITE);
+	set_slot(
+		0,
+		true,
+		editor.port_type(&"signal"),
+		Color.WHITE,
+		true,
+		editor.port_type(&"signal"),
+		Color.WHITE
+		);
 	
 	if saved_data:
 		position_offset = saved_data["position_offset"] as Vector2;

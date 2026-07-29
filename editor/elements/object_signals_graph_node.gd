@@ -84,10 +84,10 @@ func _add_collapsible_panel() -> void:
 	add_child(_collapsible_panel);
 	set_slot(_collapsible_panel.get_index(),
 	true,
-		SignalGraphEditor.PORT_TYPE_ADD_METHOD,
+		_editor.port_type(&"add_method"),
 		Color(0x73f280ff),
 		true,
-		SignalGraphEditor.PORT_TYPE_ADD_SIGNAL,
+		_editor.port_type(&"add_signal"),
 		Color(0xff786bff)
 	);
 
@@ -108,10 +108,10 @@ func add_signal_ports(node : Node) -> bool:
 		set_slot(
 			get_child_count()-1,
 			false,
-			SignalGraphEditor.PORT_TYPE_NONE,
+			_editor.port_type(&""),
 			Color.BLACK,
 			true,
-			SignalGraphEditor.PORT_TYPE_SIGNAL,
+			_editor.port_type(&"signal"),
 			Color(0xff786bff)
 		);
 		_signal_ports[signal_name] = left_port_index;
@@ -142,10 +142,10 @@ func add_method_ports(node : Node) -> bool:
 		set_slot(
 			get_child_count()-1,
 			true,
-			SignalGraphEditor.PORT_TYPE_SIGNAL,
+			_editor.port_type(&"signal"),
 			Color(0x73f280ff),
 			false,
-			SignalGraphEditor.PORT_TYPE_NONE,
+			_editor.port_type(&""),
 			Color.BLACK
 		);
 		_method_ports[method_name] = right_port_index;
@@ -296,6 +296,8 @@ func _store_connections(disconnect : bool) -> void:
 			_stored_output_connections.push_back(StoredConnection.create_from_output(from_node, to_node, from_port, to_port, self));
 		else:
 			continue;
+		print("Storing connection " + str(connection));
+		print(_stored_input_connections[_stored_input_connections.size()-1]);
 			
 		if disconnect:
 			_editor.disconnect_node(from_node, from_port, to_node, to_port);
@@ -361,7 +363,7 @@ class StoredConnection:
 			restore_self(graph_node, editor);
 			return;
 		
-		var to_port : int = graph_node.get_method_port_id(other_node_name);
+		var to_port : int = graph_node.get_method_port_id(this_port_name);
 		editor.connect_node(other_node_name, other_node_port, graph_node.name, to_port);
 	
 	func restore_output(graph_node : GraphNode, editor : SignalGraphEditor) -> void:

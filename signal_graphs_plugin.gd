@@ -10,7 +10,6 @@ func _enter_tree() -> void:
 	# Initialization of the plugin goes here.
 	create_editor();
 
-
 func _exit_tree() -> void:
 	# Clean-up of the plugin goes here.
 	remove_editor();
@@ -18,7 +17,7 @@ func _exit_tree() -> void:
 
 func create_editor() -> void:
 	_graph_editor = graph_editor_template.instantiate();
-	# set plugin reference
+	_graph_editor.plugin = self;
 	add_control_to_bottom_panel(_graph_editor, "Signal Graph")
 	
 func remove_editor() -> void:

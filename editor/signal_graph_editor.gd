@@ -2,14 +2,8 @@
 class_name SignalGraphEditor
 extends GraphEdit
 
-const META_NAME_GRAPH_DATA := "_signal_graph_data";
 const ICON_NAME_SIGNAL := "Signal";
 const ICON_NAME_METHOD := "Slot";
-
-const PORT_TYPE_NONE := -1;
-const PORT_TYPE_SIGNAL := 0;
-const PORT_TYPE_ADD_SIGNAL := 9;
-const PORT_TYPE_ADD_METHOD := 10;
 
 var scene_root : Node;
 var selected_nodes : Array[StringName] = [];
@@ -20,15 +14,21 @@ var _context_position : Vector2;
 var interface_signals : InterfaceSignals;
 var transactions : Transactions;
 var utility : Utility;
-var populating : Populating;
 var frames : Frames;
+var hooks : Hooks;
+
+var _port_types_by_name : Dictionary[StringName, int] = {
+	&"": -1
+};
+var _next_port_type_idx := 0;
 
 func _init():
 	interface_signals = InterfaceSignals.new(self);
 	transactions = Transactions.new(self);
 	utility = Utility.new(self);
-	populating = Populating.new(self);
 	frames = Frames.new(self);
+	
+	hooks = Hooks.new(self);
 
 ### CORE
 
@@ -36,6 +36,8 @@ func _ready() -> void:
 	if is_part_of_edited_scene():
 		return;
 	interface_signals.subscribe();
+	for hook in hooks.configure_port_types:
+		hook.configure_port_types();
 
 func add_one_shot() -> GraphNode:
 	var graph_node : GraphNode = GraphNodeTypes.OneShot.new();
@@ -54,109 +56,128 @@ func clear():
 		remove_child(child);
 		child.queue_free();
 
+func load(scene_root : Node) -> void:
+	scene_root = scene_root;
+	_use_context_position = false;
+	for hook in hooks.populate:
+		hook.populate_from_scene(scene_root);
+
 func save(scene_root : Node):
 	scene_root = scene_root;
 	
-	for child in get_children():
-		if child is not GraphNode:
-			continue;
-		if !child.has_method("get_save_data"):
-			continue;
-		if !child.has_method("get_represented_object"):
-			continue;
-		var represented_object : Object = child.get_represented_object();
-		if !represented_object:
-			continue;
-		var save_data = child.get_save_data();
-		represented_object.set_meta(META_NAME_GRAPH_DATA, save_data);
+	for hook in hooks.save:
+		hook.save_to_scene(scene_root);
 
 func position_new_element(element : GraphElement):
 	if _use_context_position:
 		element.position_offset = utility.local_to_graph_position(_context_position);
 	else:
 		element.position_offset = Vector2.ZERO;
-		
-class GraphNodeTypes:
-	static var SignalNode : Script = preload("res://addons/signal-graphs/editor/elements/signal_node_graph_node.gd");
-	static var OneShot : Script = preload("res://addons/signal-graphs/editor/elements/signal_one_shot_graph_node.gd");
+
+func port_type(name : StringName) -> int:
+	if _port_types_by_name.has(name):
+		return _port_types_by_name[name];
+	else:
+		printerr("No such signal graph port type name '" + str(name) + "'");
+		return -2;
+
+func register_port_type(name : StringName) -> int:
+	if _port_types_by_name.has(name):
+		printerr("Signal graph port type '" + str(name) + "' has already been defined!");
+		return _port_types_by_name[name];
+	var idx := _next_port_type_idx;
+	_next_port_type_idx += 1;
+	_port_types_by_name[name] = idx;
+	return idx;
+
+func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
+	for hook in hooks.drag_and_drop:
+		if hook.can_drop_data(at_position, data):
+			return true;
+	return false;
 	
+func _drop_data(at_position: Vector2, data: Variant) -> void:
+	for hook in hooks.drag_and_drop:
+		hook.drop_data(at_position, data);
 		
-### POPULATING
-class Populating:
+class GraphNodeTypes extends RefCounted:
+	static var OneShot : Script = preload("res://addons/signal-graphs/editor/elements/signal_one_shot_graph_node.gd");
+		
+class Hooks extends RefCounted:
+	const METHOD_NAME_GET_CAPABILITIES : StringName = &"get_signal_graph_capabilities"
+	const methods_required_per_capability : Dictionary = {
+		"populate": [
+			&"populate_from_scene"
+		],
+		"drag_and_drop": [
+			&"can_drop_data",
+			&"drop_data"
+		],
+		"configure_port_types": [
+			&"configure_port_types"
+		],
+		"save": [
+			&"save_to_scene"
+		]
+	};
+	
 	var editor : SignalGraphEditor;
+	
+	var populate : Array[Object] = [];
+	var drag_and_drop : Array[Object] = [];
+	var configure_port_types : Array[Object] = [];
+	var save : Array[Object] = [];
 	
 	func _init(editor : GraphEdit):
 		self.editor = editor;
+		
+		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_signals.gd"));
 	
-	func populate_from_scene(scene_root : Node) -> void:
-		editor.scene_root = scene_root;
-		editor._use_context_position = false;
-		add_graph_node_for_node(scene_root, true, true)
-		populate_node_connections();
-	
-	func create_graph_node_for_node(node : Node, require_connections : bool = false) -> GraphNode:
-		var graph_node : GraphNode = null;
+	func add_hook(script : Script) -> bool:
+		var instance : Object = script.new(editor);
+		if !instance.has_method(METHOD_NAME_GET_CAPABILITIES):
+			printerr("Could not add script " + script.resource_path + " as a signal graph hook: Does not implement required method '" + str(METHOD_NAME_GET_CAPABILITIES) + "'");
+			return false;
 		
-		if node.owner == editor.scene_root || node == editor.scene_root:
-			graph_node = GraphNodeTypes.SignalNode.new() as GraphNode;
-			var saved_data : Dictionary = node.get_meta(META_NAME_GRAPH_DATA) if node.has_meta(META_NAME_GRAPH_DATA) else {};
-			var any_connections : bool = graph_node.setup(node, saved_data, editor);
-			if require_connections && !any_connections:
-				graph_node.queue_free();
-				graph_node = null;
-			else:
-				editor.position_new_element(graph_node);
+		var capabilities : Array[String] = instance.call(METHOD_NAME_GET_CAPABILITIES);
 		
-		return graph_node;
+		var all_capabilities := {
+			"populate": populate,
+			"drag_and_drop": drag_and_drop,
+			"configure_port_types": configure_port_types,
+			"save": save
+		};
 		
-	func add_graph_node_for_node(node : Node, recursive : bool = false, require_connections : bool = false) -> GraphNode:
-		var graph_node := create_graph_node_for_node(node, require_connections);
-		if graph_node:
-			editor.add_child(graph_node);
+		var granted_capabilities : Array[String] = [];
 		
-		if recursive:
-			for child in node.get_children():
-				add_graph_node_for_node(child, true, require_connections);
-		
-		return graph_node;
-	
-	func populate_node_connections() -> void:
-		for child in editor.get_children():
-			if child is not GraphNode:
+		for capability in capabilities:
+			if !all_capabilities.has(capability):
+				printerr("Invalid signal graph hook capability '" + capability + "' in script " + script.resource_path);
+				continue;
+			var list : Array[Object] = all_capabilities[capability];
+			if list.has(instance):
+				printerr("Duplicate signal graph hook capability '" + capability + "' in script " + script.resource_path);
+				continue;
+			var required_methods : Array = methods_required_per_capability[capability];
+			var missing_any := false;
+			for required_method_name : StringName in required_methods:
+				if !instance.has_method(required_method_name):
+					printerr("Missing method '" + str(required_method_name) + "', required for signal graph hook capability '" + capability + "' in script " + script.resource_path);
+					missing_any = true;
+					continue;
+			
+			if missing_any:
+				printerr("Skipping signal graph hook capability '" + capability + "' in script " + script.resource_path + " due to missing required methods.");
 				continue;
 			
-			var graph_node : GraphNode = child;
+			granted_capabilities.push_back(capability);
+			list.push_back(instance);
 			
-			if !child.has_method(&"get_object"):
-				continue;
-			
-			var node : Node = child.call(&"get_object");
-			if !node:
-				continue;
-			
-			for connection in node.get_incoming_connections():
-				var sgnal : Signal = connection["signal"];
-				var callable : Callable = connection["callable"];
-				
-				var flags : ConnectFlags = connection["flags"];
-				if(flags & CONNECT_PERSIST) == 0: continue;
-				var owner := sgnal.get_object();
-				if owner is not Node:
-					continue;
-					
-				var owner_graph_node = editor.utility.get_graph_node_for_node(owner);
-				if !owner_graph_node:
-					continue;
-				
-				var from_port : int = owner_graph_node.get_signal_port_id(sgnal.get_name());
-				var to_port : int = graph_node.get_method_port_id(callable.get_method());
-			
-				if from_port == PORT_TYPE_NONE || to_port == PORT_TYPE_NONE:
-					continue;
-				
-				editor.connect_node(owner_graph_node.name, from_port, graph_node.name, to_port);
-				
-class Selector:
+		print("Added signal graph hook script: " + script.resource_path + " with capabilities: " + str(granted_capabilities));
+		
+		return true;
+	
+class Selector extends RefCounted:
 	const TAB_METHODS := 0;
 	const TAB_SIGNALS := 1;
 	static var _last_selected_tab_index := TAB_METHODS;
@@ -443,7 +464,7 @@ class Selector:
 
 
 ### UTILITY
-class Utility:
+class Utility extends RefCounted:
 	const VARIANT_TYPE_NAMES : Array = ["Nil","bool","int","float","String","Vector2","Vector2i","Rect2","Rect2i","Vector3","Vector3i","Transform2D","Vector4","Vector4i","Plane","Quaternion","AABB","Basis","Transform3D","Projection","Color","StringName","NodePath","RID","Object","Callable","Signal","Dictionary","Array","PackedByteArray","PackedInt32Array","PackedInt64Array","PackedFloat32Array","PackedFloat64Array","PackedStringArray","PackedVector2Array","PackedVector3Array","PackedColorArray","PackedVector4Array"];
 
 	var editor : SignalGraphEditor;
@@ -453,10 +474,7 @@ class Utility:
 	
 	func local_to_graph_position(position : Vector2) -> Vector2:
 		return (position + editor.scroll_offset) / editor.zoom;
-		
-	func get_graph_node_for_node(node : Node) -> GraphNode:
-		return editor.get_node_or_null(NodePath(str(node.get_instance_id()))) as GraphNode;
-		
+	
 	static func get_connected_method_names(obj : Object) -> Array[StringName]:
 		var connected_methods : Array[StringName] = [];
 		for connection in obj.get_incoming_connections():
@@ -532,7 +550,7 @@ class Utility:
 		return common_ancestor;
 
 ### TRANSACTIONS
-class Transactions:
+class Transactions extends RefCounted:
 	var editor : SignalGraphEditor;
 	var undo_redo : EditorUndoRedoManager;
 	
@@ -671,7 +689,7 @@ class Transactions:
 
 ### INTERFACE SIGNALS
 
-class InterfaceSignals:
+class InterfaceSignals extends RefCounted:
 	var editor : SignalGraphEditor;
 	
 	var _dragging_across_frames := false;
@@ -681,9 +699,6 @@ class InterfaceSignals:
 
 	func subscribe() -> void:
 		editor.popup_request.connect(_on_popup_request);
-		editor.connection_request.connect(_on_connection_request);
-		editor.disconnection_request.connect(_on_disconnection_request);
-		editor.connection_drag_started.connect(_on_connection_drag_started);
 		editor.node_selected.connect(_on_node_selected);
 		editor.node_deselected.connect(_on_node_deselected);
 		editor.begin_node_move.connect(_on_begin_node_move);
@@ -707,64 +722,6 @@ class InterfaceSignals:
 	
 	func _on_popup_item_pressed(index : int) -> void:
 		print(index);
-		
-	func _on_connection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
-		print("connection request")
-		editor.transactions.begin_transaction("Connect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		var from_node := editor.get_node(NodePath(from_node_name));
-		var to_node := editor.get_node(NodePath(to_node_name));
-		
-		# TODO VERY HARDCODED, check graph node types
-		var from_object : Object = from_node.get_object();
-		var to_object : Object = to_node.get_object();
-		var callable := Callable(to_object, to_node.get_method_port_name(to_port))
-		var signal_name : StringName = from_node.get_signal_port_name(from_port);
-		var undo_redo := EditorInterface.get_editor_undo_redo();
-		undo_redo.add_undo_method(self, &"_update_scene_tree");
-		editor.transactions.connect_signal(from_object, signal_name, callable, CONNECT_PERSIST, false);
-		undo_redo.add_do_method(self, &"_update_scene_tree");
-		
-		editor.transactions.connect_node(from_node_name, from_port, to_node_name, to_port, false);
-		editor.transactions.end_transaction();
-	
-	func _on_disconnection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
-		print("disconnection request")
-		editor.transactions.begin_transaction("Disconnect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		var from_node := editor.get_node(NodePath(from_node_name));
-		var to_node := editor.get_node(NodePath(to_node_name));
-		
-		# TODO VERY HARDCODED, check graph node types
-		var from_object : Object = from_node.get_object();
-		var to_object : Object = to_node.get_object();
-		var callable := Callable(to_object, to_node.get_method_port_name(to_port))
-		var signal_name : StringName = from_node.get_signal_port_name(from_port);
-		var undo_redo := EditorInterface.get_editor_undo_redo();
-		undo_redo.add_undo_method(self, &"_update_scene_tree");
-		editor.transactions.disconnect_signal(from_object, signal_name, callable, false);
-		undo_redo.add_do_method(self, &"_update_scene_tree");
-		
-		editor.transactions.disconnect_node(from_node_name, from_port, to_node_name, to_port, false);
-		editor.transactions.end_transaction();
-		
-	func _on_connection_drag_started(from_node_name : StringName, from_port : int, is_output : bool) -> void:
-		print("connection drag started")
-		var node := editor.get_node(NodePath(from_node_name));
-		
-		# TODO VERY HARDCODED, check graph node types
-		var graph_node : GraphNode = node;
-		var slot : int;
-		var slot_type : int;
-		if is_output:
-			slot = graph_node.get_output_port_slot(from_port);
-			slot_type = graph_node.get_slot_type_right(slot);
-		else:
-			slot = graph_node.get_input_port_slot(from_port);
-			slot_type = graph_node.get_slot_type_left(slot);
-		
-		match slot_type:
-			PORT_TYPE_ADD_METHOD:
-				editor.force_connection_drag_end();
-				Selector.show(graph_node.get_object(), Selector.TAB_METHODS, Callable(graph_node, &"method_add_requested"), Callable(graph_node, &"signal_add_requested"));
 		
 	func _on_node_selected(node : Node) -> void:
 		print("node selected");
@@ -804,45 +761,9 @@ class InterfaceSignals:
 	func _on_delete_nodes_request(nodes : Array[StringName]) -> void:
 		print("delete nodes request");
 		editor.transactions.delete_nodes(nodes);
-		
-	func _update_scene_tree():
-		# Force refresh the scene tree view to reflect new connections
-		if editor.scene_root:
-			editor.scene_root.name = editor.scene_root.name;
 
-### DRAG AND DROP
-# ( no class )
-
-func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
-	var data_dict : Dictionary = data;
-	if data_dict["type"] != "nodes": return false;
-	return true;
-	
-func _drop_data(at_position: Vector2, data: Variant) -> void:
-	var data_dict : Dictionary = data;
-	if data_dict["type"] != "nodes": return;
-
-	_context_position = at_position;
-	_use_context_position = true;
-	
-	set_selected(null);
-	
-	for node_path : NodePath in data_dict["nodes"]:
-		var node := get_node(node_path);
-		if !node: continue;
-		
-		var instance_id := node.get_instance_id();
-		var existing_graph_node : GraphNode = utility.get_graph_node_for_node(node);
-		
-		if existing_graph_node:
-			existing_graph_node.set_selected(true);
-		else:
-			var graph_node := populating.create_graph_node_for_node(node, false);
-			graph_node.set_selected(true);
-			transactions.add_child(graph_node, true, true);
-			
 ### FRAMES
-class Frames:
+class Frames extends RefCounted:
 	var editor : SignalGraphEditor;
 	
 	func _init(editor : GraphEdit):
