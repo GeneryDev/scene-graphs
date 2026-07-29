@@ -142,7 +142,7 @@ func add_method_ports(node : Node) -> bool:
 		set_slot(
 			get_child_count()-1,
 			true,
-			_editor.port_type(&"signal"),
+			_editor.port_type(&"method"),
 			Color(0x73f280ff),
 			false,
 			_editor.port_type(&""),

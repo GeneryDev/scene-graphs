@@ -15,9 +15,11 @@ func get_signal_graph_capabilities() -> Array[String]:
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
+	editor.register_port_type(&"method");
 	editor.register_port_type(&"signal");
 	editor.register_port_type(&"add_signal");
 	editor.register_port_type(&"add_method");
+	editor.add_valid_connection_type(editor.port_type(&"signal"), editor.port_type(&"method"));
 
 ### CAPABILITY: populate
 
