@@ -612,6 +612,7 @@ class Transactions:
 		var connection_list := editor.get_connection_list();
 		for node_name in nodes:
 			for i in range(connection_list.size()):
+				if i >= connection_list.size(): break;
 				var connection := connection_list[i];
 				var from_node := connection["from_node"] as StringName;
 				var to_node := connection["to_node"] as StringName;
@@ -773,6 +774,7 @@ class InterfaceSignals:
 		_deselect_node(node);
 	func _deselect_node(node : Node) -> void:
 		for i in range(editor.selected_nodes.size()):
+			if i >= editor.selected_nodes.size(): break;
 			if editor.selected_nodes[i] == node.name:
 				editor.selected_nodes.remove_at(i);
 				i -= 1;
