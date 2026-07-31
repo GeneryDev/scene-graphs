@@ -14,10 +14,15 @@ var connection_rotation : float = 0;
 var connection_flags : ConnectFlags;
 var connection_callable : Callable;
 
+var mid_point_offset : Vector2 = Vector2(0,0);
+var dragging_reference_mid_point : Vector2;
+var dragging_mid_point_influence : float = 1;
+
 func _init() -> void:
 	resizable = false;
-	draggable = false;
+	draggable = true;
 	selectable = true;
+	position_offset_changed.connect(_on_position_offset_changed);
 
 func setup(connection : Dictionary, editor : SignalGraphEditor) -> bool:
 	self.editor = editor;
@@ -49,32 +54,37 @@ func _draw() -> void:
 	draw_set_transform(center, connection_rotation);
 	draw_polygon(arrow_poly,PackedColorArray([fill_color,fill_color,fill_color,fill_color]))
 	draw_polyline(arrow_poly_closed,outline_color, 2, true)
-#	draw_texture()
 	var theme := EditorInterface.get_editor_theme();
-	if connection_flags & CONNECT_ONE_SHOT != 0:
+	if (connection_flags & CONNECT_ONE_SHOT) != 0:
 		var icon := theme.get_icon("ZoomReset", "EditorIcons") as Texture2D;
 		draw_set_transform(center, connection_rotation);
 		draw_texture(icon, Vector2(VISUAL_RADIUS*1.5,VISUAL_RADIUS*1.5) - icon.get_size() / 2);
-	if connection_flags & CONNECT_DEFERRED != 0:
+	if (connection_flags & CONNECT_DEFERRED) != 0:
 		var icon := theme.get_icon("Timer", "EditorIcons") as Texture2D;
 		draw_set_transform(center, connection_rotation);
 		draw_texture(icon, Vector2(VISUAL_RADIUS*1.5,-VISUAL_RADIUS*1.5) - icon.get_size() / 2);
-	if connection_flags & CONNECT_APPEND_SOURCE_OBJECT != 0 || connection_callable.get_bound_arguments_count() > 0 || connection_callable.get_unbound_arguments_count() > 0:
+	if (connection_flags & CONNECT_APPEND_SOURCE_OBJECT) != 0 || connection_callable.get_bound_arguments_count() > 0 || connection_callable.get_unbound_arguments_count() > 0:
 		var icon := ICON_ARGUMENTS;
 		draw_set_transform(center, connection_rotation);
 		draw_texture(icon, Vector2(-VISUAL_RADIUS*3,0) - icon.get_size() / 2);
-#		draw_circle(size / 2, VISUAL_RADIUS+2, outline_color, true, -1, true);
-#		draw_circle(size / 2, VISUAL_RADIUS, fill_color, true, -1, true);
 	
 func reposition(position_offset : Vector2, rotation : float = 0) -> void:
+	if editor.dragging && selected:
+		return;
 	self.position_offset = position_offset - Vector2(INTERACTION_RADIUS, INTERACTION_RADIUS);
 	size = Vector2(INTERACTION_RADIUS, INTERACTION_RADIUS)*2;
 	self.rotation = 0;
 	connection_rotation = rotation;
 
+func get_from_graph_node() -> GraphNode:
+	return editor.get_node_or_null(NodePath(graph_connection.from_node));
+func get_to_graph_node() -> GraphNode:
+	return editor.get_node_or_null(NodePath(graph_connection.to_node));
+
 func update_connection_info() -> void:
-	var from_graph_node := editor.get_node(NodePath(graph_connection.from_node));
-	var to_graph_node := editor.get_node(NodePath(graph_connection.to_node));
+	var from_graph_node := get_from_graph_node();
+	var to_graph_node := get_to_graph_node();
+	if !from_graph_node || !to_graph_node: return;
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
@@ -100,4 +110,18 @@ func _update_connection_info(flags : ConnectFlags, callable : Callable) -> void:
 	connection_flags = flags;
 	connection_callable = callable;
 	if updated: queue_redraw();
-		
+
+func get_current_mid_point_offset() -> Vector2:
+	if selected && editor.dragging:
+		return lerp(mid_point_offset, position_offset - dragging_reference_mid_point, dragging_mid_point_influence);
+	return mid_point_offset;
+
+func apply_mid_point_offset_change() -> void:
+	mid_point_offset = get_current_mid_point_offset();
+	
+func _on_position_offset_changed() -> void:
+	if editor.dragging:
+		editor.connections_layer.queue_redraw();
+		for child in editor.connections_layer.get_children():
+			if child is not Line2D: continue;
+			editor.invalidate_connection_line_cache();

@@ -11,6 +11,7 @@ signal selection_changed_with_script(script : Script, selected_nodes : Array[Nod
 
 var scene_root : Node;
 var selected_nodes : Array[StringName] = [];
+var dragging : bool = false;
 
 var _use_context_position : bool;
 var _context_position : Vector2;
@@ -112,6 +113,9 @@ func notify_selection_changed() -> void:
 
 func notify_connections_changed() -> void:
 	connections_changed.emit();
+	
+func invalidate_connection_line_cache() -> void:
+	connection_lines_curvature = connection_lines_curvature;
 
 func connect_node_and_notify(from_node : StringName, from_port : int, to_node : StringName, to_port : int, keep_alive : bool = true) -> Error:
 	var err := connect_node(from_node, from_port, to_node, to_port);
@@ -131,6 +135,32 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 func _drop_data(at_position: Vector2, data: Variant) -> void:
 	for hook in hooks.drag_and_drop:
 		hook.drop_data(at_position, data);
+
+func _get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
+	for hook in hooks.override_connection_lines:
+		var override = hook.get_connection_line(from_position, to_position);
+		if override:
+			return override;
+	return get_default_connection_line(from_position, to_position);
+
+func get_default_connection_line(from_position: Vector2, to_position: Vector2, curvature : float = -1) -> PackedVector2Array:
+	if curvature < 0:
+		curvature = connection_lines_curvature;
+	var x_diff : float = (to_position.x - from_position.x);
+	var cp_offset : float = x_diff * curvature;
+	if x_diff < 0:
+		cp_offset *= -1;
+
+	var curve := Curve2D.new();
+	curve.add_point(from_position);
+	curve.set_point_out(0, Vector2(cp_offset, 0));
+	curve.add_point(to_position);
+	curve.set_point_in(1, Vector2(-cp_offset, 0));
+
+	if curvature > 0:
+		return curve.tessellate(5, 2.0);
+	else:
+		return curve.tessellate(1);
 		
 class Hooks extends RefCounted:
 	const METHOD_NAME_GET_CAPABILITIES : StringName = &"get_signal_graph_capabilities"
@@ -150,6 +180,9 @@ class Hooks extends RefCounted:
 		],
 		"filter_delete": [
 			&"can_delete"
+		],
+		"override_connection_lines": [
+			&"get_connection_line"
 		]
 	};
 	
@@ -160,6 +193,7 @@ class Hooks extends RefCounted:
 	var configure_port_types : Array[Object] = [];
 	var save : Array[Object] = [];
 	var filter_delete : Array[Object] = [];
+	var override_connection_lines : Array[Object] = [];
 	
 	func _init(editor : GraphEdit):
 		self.editor = editor;
@@ -179,7 +213,8 @@ class Hooks extends RefCounted:
 			"drag_and_drop": drag_and_drop,
 			"configure_port_types": configure_port_types,
 			"save": save,
-			"filter_delete": filter_delete
+			"filter_delete": filter_delete,
+			"override_connection_lines": override_connection_lines
 		};
 		
 		var granted_capabilities : Array[String] = [];
@@ -753,12 +788,14 @@ class InterfaceSignals extends RefCounted:
 				i -= 1;
 		editor.notify_selection_changed();
 	func _on_begin_node_move() -> void:
+		editor.dragging = true;
 		_dragging_across_frames = Input.is_key_pressed(Key.KEY_SHIFT);
 		if _dragging_across_frames:
 			for node_name in editor.selected_nodes:
 				editor.detach_graph_element_from_frame(node_name);
 		
 	func _on_end_node_move() -> void:
+		editor.dragging = false;
 		_dragging_across_frames = Input.is_key_pressed(Key.KEY_SHIFT);
 		if _dragging_across_frames:
 			var mouse_pos := editor.get_local_mouse_position();

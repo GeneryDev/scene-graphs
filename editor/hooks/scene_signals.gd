@@ -14,7 +14,7 @@ func _init(editor : GraphEdit):
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["populate","drag_and_drop","configure_port_types","save","filter_delete"];
+	return ["populate","drag_and_drop","configure_port_types","save","filter_delete","override_connection_lines"];
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
@@ -147,6 +147,8 @@ func connect_interface_signals() -> void:
 	editor.connections_changed.connect(_on_connections_changed);
 	editor.connections_layer.draw.connect(_on_connections_draw);
 	editor.selection_changed_with_script.connect(_on_selection_changed_with_script);
+	editor.begin_node_move.connect(_on_begin_node_move);
+	editor.end_node_move.connect(_on_end_node_move);
 	
 func _on_connection_drag_started(from_node_name : StringName, from_port : int, is_output : bool) -> void:
 	var node := editor.get_node_or_null(NodePath(from_node_name));
@@ -280,12 +282,20 @@ func _reposition_connection_element(connection : Dictionary, graph_element : Gra
 	var line_from := (from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset);
 	var line_to := (to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset);
 	var line : PackedVector2Array = editor.get_connection_line(line_from, line_to);
+	var mid_point_straight := (line_from + line_to) / 2;
 	var mid_point := line[line.size()/2] if line.size() % 2 == 1 else (line[line.size()/2-1]+line[line.size()/2])/2;
 	
 	var before_mid_point := line[line.size()/2-1] if line.size() % 2 == 1 else line[line.size()/2-1];
 	var after_mid_point := line[line.size()/2] if line.size() % 2 == 1 else line[line.size()/2];
-	var rotation := before_mid_point.angle_to_point(after_mid_point);
-	graph_element.reposition(mid_point, rotation);
+	var new_position : Vector2;
+	var rotation : float = 0;
+	if graph_element.get_current_mid_point_offset():
+		new_position = mid_point_straight + graph_element.mid_point_offset;
+		rotation = before_mid_point.angle_to_point(after_mid_point);
+	else:
+		new_position = mid_point;
+		rotation = (line_to - line_from).angle();
+	graph_element.reposition(new_position, rotation);
 	graph_element.update_connection_info();
 
 ### SELECTION
@@ -321,3 +331,72 @@ func select_connections(connections : Array) -> void:
 	var edit_resource : Resource = SignalConnectionPropertyEdit.new();
 	edit_resource.setup(editor, connections);
 	EditorInterface.inspect_object(edit_resource);
+
+### CAPABILITY: override_connection_lines
+
+func get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
+	var cached_connection := _find_connection_from_line_ends(from_position, to_position);
+	if cached_connection:
+		var mid_point := (from_position + to_position) / 2;
+		if cached_connection.graph_element.get_current_mid_point_offset() != Vector2.ZERO:
+			return get_adjusted_connection_line(from_position, to_position, cached_connection.graph_element);
+	return [];
+
+func get_adjusted_connection_line(from_position: Vector2, to_position: Vector2, connection_graph_element : GraphElement) -> PackedVector2Array:
+	var curvature := editor.connection_lines_curvature;
+	var x_diff : float = (to_position.x - from_position.x);
+	var cp_offset : float = x_diff * 0.3;
+	if x_diff < 0:
+		cp_offset *= -1;
+		
+	var mid_point := (from_position + to_position) / 2;
+
+	var curve := Curve2D.new();
+	curve.add_point(from_position);
+	curve.set_point_out(0, Vector2(cp_offset, 0));
+	curve.add_point(mid_point + connection_graph_element.get_current_mid_point_offset() * editor.zoom);
+	curve.set_point_in(1, -(to_position - from_position) * 0.25);
+	curve.set_point_out(1, (to_position - from_position) * 0.25);
+	curve.add_point(to_position);
+	curve.set_point_in(2, Vector2(-cp_offset, 0));
+
+	return curve.tessellate(5, 2.0);
+
+func _find_connection_from_line_ends(from_position: Vector2, to_position: Vector2) -> Dictionary:
+	for cached_connection : Dictionary in _connections_with_elements:
+		var connection = cached_connection.connection;
+		if !is_instance_valid(cached_connection.graph_element): continue;
+		
+		var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
+		if !from_graph_node:
+			continue;
+		if from_position.distance_squared_to((from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset) * editor.zoom) > 5:
+			continue;
+		var to_graph_node := editor.get_node_or_null(NodePath(connection.to_node));
+		if !to_graph_node:
+			continue;
+		if to_position.distance_squared_to((to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset) * editor.zoom) > 5:
+			continue;
+		
+		return cached_connection;
+	return {};
+
+func _on_begin_node_move() -> void:
+	for cached_connection : Dictionary in _connections_with_elements:
+		var connection = cached_connection.connection;
+		if !is_instance_valid(cached_connection.graph_element): continue;
+		if cached_connection.graph_element.selected:
+			cached_connection.graph_element.dragging_reference_mid_point = cached_connection.graph_element.position_offset - cached_connection.graph_element.mid_point_offset;
+			
+			var neighbor_selected_count := 0;
+			if cached_connection.graph_element.get_from_graph_node().selected: neighbor_selected_count += 1;
+			if cached_connection.graph_element.get_to_graph_node().selected: neighbor_selected_count += 1;
+			
+			cached_connection.graph_element.dragging_mid_point_influence = 1 - neighbor_selected_count * 0.5;
+
+func _on_end_node_move() -> void:
+	for cached_connection : Dictionary in _connections_with_elements:
+		var connection = cached_connection.connection;
+		if !is_instance_valid(cached_connection.graph_element): continue;
+		if cached_connection.graph_element.selected:
+			cached_connection.graph_element.apply_mid_point_offset_change();
