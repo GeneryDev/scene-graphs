@@ -149,6 +149,7 @@ func connect_interface_signals() -> void:
 	editor.selection_changed_with_script.connect(_on_selection_changed_with_script);
 	editor.begin_node_move.connect(_on_begin_node_move);
 	editor.end_node_move.connect(_on_end_node_move);
+	editor.visibility_changed.connect(_on_visibility_changed);
 	
 func _on_connection_drag_started(from_node_name : StringName, from_port : int, is_output : bool) -> void:
 	var node := editor.get_node_or_null(NodePath(from_node_name));
@@ -228,6 +229,10 @@ func _on_connections_draw() -> void:
 func _on_connections_changed() -> void:
 	_refresh_connection_elements();
 
+func _on_visibility_changed() -> void:
+	if editor.is_visible_in_tree():
+		call_deferred(&"_refresh_connection_elements");
+
 func _refresh_connection_elements() -> void:
 	var intended_index := editor.connections_layer.get_index()+1;
 	
@@ -239,6 +244,8 @@ func _refresh_connection_elements() -> void:
 		var to_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.to_node));
 		if !is_instance_of(from_graph_node, ObjectSignalsNode): continue;
 		if !is_instance_of(to_graph_node, ObjectSignalsNode): continue;
+		if connection.from_port >= from_graph_node.get_output_port_count(): continue;
+		if connection.to_port >= to_graph_node.get_input_port_count(): continue;
 		if from_graph_node.get_output_port_type(connection.from_port) != editor.port_type(&"signal"): continue;
 		if to_graph_node.get_input_port_type(connection.to_port) != editor.port_type(&"method"): continue;
 		
@@ -370,11 +377,13 @@ func _find_connection_from_line_ends(from_position: Vector2, to_position: Vector
 		var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
 		if !from_graph_node:
 			continue;
+		if connection.from_port >= from_graph_node.get_output_port_count(): continue;
 		if from_position.distance_squared_to((from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset) * editor.zoom) > 5:
 			continue;
 		var to_graph_node := editor.get_node_or_null(NodePath(connection.to_node));
 		if !to_graph_node:
 			continue;
+		if connection.to_port >= to_graph_node.get_input_port_count(): continue;
 		if to_position.distance_squared_to((to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset) * editor.zoom) > 5:
 			continue;
 		

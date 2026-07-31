@@ -110,8 +110,6 @@ func update_object_connection(pair : ObjectConnectionPair) -> void:
 		if (old_signal_connection_candidate.flags & CONNECT_PERSIST) == 0: continue;
 		if old_signal_connection_candidate.callable.get_method() == pair.method_name:
 			old_signal_connection = old_signal_connection_candidate;
-	
-	var undo_redo := EditorInterface.get_editor_undo_redo();
 			
 	if old_signal_connection:
 		pair.from_object.disconnect(pair.signal_name, old_signal_connection.callable);

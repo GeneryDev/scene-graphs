@@ -29,6 +29,7 @@ var _port_types_by_name : Dictionary[StringName, int] = {
 	&"": -1
 };
 var _next_port_type_idx := 0;
+var _pending_rearrange_after_load := false;
 
 func _init():
 	interface_signals = InterfaceSignals.new(self);
@@ -49,6 +50,7 @@ func _ready() -> void:
 		hook.configure_port_types();
 
 func clear():
+	_pending_rearrange_after_load = false;
 	clear_connections();
 	notify_connections_changed();
 	for child in get_children():
@@ -64,6 +66,15 @@ func load(scene_root : Node) -> void:
 	_use_context_position = false;
 	for hook in hooks.populate:
 		hook.populate_from_scene(scene_root);
+	
+	if is_visible_in_tree():
+		call_deferred(&"rearrange_after_load");
+	else:
+		_pending_rearrange_after_load = true;
+
+func rearrange_after_load():
+	_pending_rearrange_after_load = false;
+	arrange_nodes();
 
 func save(scene_root : Node):
 	scene_root = scene_root;
@@ -757,6 +768,7 @@ class InterfaceSignals extends RefCounted:
 		editor.end_node_move.connect(_on_end_node_move);
 		editor.child_exiting_tree.connect(_on_node_removed);
 		editor.delete_nodes_request.connect(_on_delete_nodes_request);
+		editor.visibility_changed.connect(_on_visibility_changed);
 	
 	func _on_popup_request(at_position : Vector2) -> void:
 		var menu := PopupMenu.new();
@@ -809,6 +821,7 @@ class InterfaceSignals extends RefCounted:
 				
 	func _on_node_removed(node : Node) -> void:
 		_deselect_node(node);
+		
 	func _on_delete_nodes_request(nodes : Array[StringName]) -> void:
 		nodes = nodes.filter(
 			func (n : StringName) -> bool:
@@ -818,6 +831,10 @@ class InterfaceSignals extends RefCounted:
 				return true;
 		);
 		editor.transactions.delete_nodes(nodes);
+		
+	func _on_visibility_changed() -> void:
+		if editor._pending_rearrange_after_load:
+			editor.call_deferred(&"rearrange_after_load");
 
 ### FRAMES
 class Frames extends RefCounted:
