@@ -102,9 +102,6 @@ func update_object_connection(pair : ObjectConnectionPair) -> void:
 	if !is_instance_valid(pair.from_object) || !is_instance_valid(pair.to_object):
 		printerr("Cannot update signal connection properties on freed objects.");
 		return;
-	if !is_instance_valid(editor):
-		printerr("Cannot update signal connection properties on a freed editor.");
-		return;
 		
 	var old_signal_connection : Dictionary;
 	
