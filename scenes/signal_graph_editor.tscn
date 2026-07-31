@@ -30,10 +30,13 @@ layout_mode = 2
 theme_override_constants/h_separation = 5
 alignment = 2
 
+[node name="Button4" type="Button" parent="VBoxContainer/Header/HFlowContainer" unique_id=1729138860]
+layout_mode = 2
+text = "Debug: Print Tree"
+
 [node name="Label" type="Label" parent="VBoxContainer/Header/HFlowContainer" unique_id=1870180315]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Hello"
 
 [node name="Button3" type="Button" parent="VBoxContainer/Header/HFlowContainer" unique_id=623076724]
 layout_mode = 2
@@ -57,9 +60,15 @@ text = "Reload Plugin"
 layout_mode = 2
 size_flags_vertical = 3
 scroll_offset = Vector2(0, -31)
+grid_pattern = 1
 right_disconnects = true
+type_names = {
+0: "method",
+1: "signal"
+}
 script = ExtResource("1_bwmb2")
 
+[connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button4" to="VBoxContainer/GraphEdit" method="print_tree_pretty"]
 [connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button3" to="." method="save_to_scene"]
 [connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button2" to="." method="populate_from_scene"]
 [connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button" to="." method="reload_plugin"]

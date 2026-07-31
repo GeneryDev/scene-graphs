@@ -5,6 +5,10 @@ extends GraphEdit
 const ICON_NAME_SIGNAL := "Signal";
 const ICON_NAME_METHOD := "Slot";
 
+signal connections_changed();
+signal selection_changed();
+signal selection_changed_with_script(script : Script, selected_nodes : Array[Node]);
+
 var scene_root : Node;
 var selected_nodes : Array[StringName] = [];
 
@@ -17,6 +21,9 @@ var utility : Utility;
 var frames : Frames;
 var hooks : Hooks;
 
+var overlay : Control;
+var connections_layer : Control;
+
 var _port_types_by_name : Dictionary[StringName, int] = {
 	&"": -1
 };
@@ -28,6 +35,7 @@ func _init():
 	utility = Utility.new(self);
 	frames = Frames.new(self);
 	
+	connections_layer = get_node(^"_connection_layer");
 	hooks = Hooks.new(self);
 
 ### CORE
@@ -39,22 +47,16 @@ func _ready() -> void:
 	for hook in hooks.configure_port_types:
 		hook.configure_port_types();
 
-func add_one_shot() -> GraphNode:
-	var graph_node : GraphNode = GraphNodeTypes.OneShot.new();
-	
-	position_new_element(graph_node);
-		
-	transactions.add_child(graph_node, true);
-	
-	return graph_node;
-
 func clear():
 	clear_connections();
+	notify_connections_changed();
 	for child in get_children():
 		if child is not GraphElement:
 			continue;
 		remove_child(child);
 		child.queue_free();
+	selected_nodes.clear();
+	notify_selection_changed();
 
 func load(scene_root : Node) -> void:
 	scene_root = scene_root;
@@ -90,6 +92,36 @@ func register_port_type(name : StringName) -> int:
 	_port_types_by_name[name] = idx;
 	return idx;
 
+func notify_selection_changed() -> void:
+	var only_script : Script = null;
+	var only_script_nodes : Array[Node];
+	var script_set := false;
+	for node_name in selected_nodes:
+		var node := get_node(NodePath(node_name));
+		var script : Script = node.get_script();
+		if !script_set:
+			only_script = script;
+			script_set = true;
+		elif only_script != script:
+			only_script = null;
+		
+		only_script_nodes.append(node);
+	
+	selection_changed.emit();
+	selection_changed_with_script.emit(only_script, only_script_nodes);
+
+func notify_connections_changed() -> void:
+	connections_changed.emit();
+
+func connect_node_and_notify(from_node : StringName, from_port : int, to_node : StringName, to_port : int, keep_alive : bool = true) -> Error:
+	var err := connect_node(from_node, from_port, to_node, to_port);
+	notify_connections_changed();
+	return err;
+
+func disconnect_node_and_notify(from_node : StringName, from_port : int, to_node : StringName, to_port : int) -> void:
+	disconnect_node(from_node, from_port, to_node, to_port);
+	notify_connections_changed();
+
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 	for hook in hooks.drag_and_drop:
 		if hook.can_drop_data(at_position, data):
@@ -99,9 +131,6 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 func _drop_data(at_position: Vector2, data: Variant) -> void:
 	for hook in hooks.drag_and_drop:
 		hook.drop_data(at_position, data);
-		
-class GraphNodeTypes extends RefCounted:
-	static var OneShot : Script = preload("res://addons/signal-graphs/editor/elements/signal_one_shot_graph_node.gd");
 		
 class Hooks extends RefCounted:
 	const METHOD_NAME_GET_CAPABILITIES : StringName = &"get_signal_graph_capabilities"
@@ -118,6 +147,9 @@ class Hooks extends RefCounted:
 		],
 		"save": [
 			&"save_to_scene"
+		],
+		"filter_delete": [
+			&"can_delete"
 		]
 	};
 	
@@ -127,6 +159,7 @@ class Hooks extends RefCounted:
 	var drag_and_drop : Array[Object] = [];
 	var configure_port_types : Array[Object] = [];
 	var save : Array[Object] = [];
+	var filter_delete : Array[Object] = [];
 	
 	func _init(editor : GraphEdit):
 		self.editor = editor;
@@ -145,7 +178,8 @@ class Hooks extends RefCounted:
 			"populate": populate,
 			"drag_and_drop": drag_and_drop,
 			"configure_port_types": configure_port_types,
-			"save": save
+			"save": save,
+			"filter_delete": filter_delete
 		};
 		
 		var granted_capabilities : Array[String] = [];
@@ -203,8 +237,6 @@ class Selector extends RefCounted:
 		
 		_active["method_callback"] = method_callback;
 		_active["signal_callback"] = signal_callback;
-		
-		dialog.window_input.connect(_on_window_input);
 		
 		tree.item_selected.connect(_on_selection_changed);
 		tree.item_activated.connect(_tree_on_item_activated);
@@ -285,21 +317,6 @@ class Selector extends RefCounted:
 				pass;
 				
 		_on_selection_changed();
-		
-	static func _on_window_input(evt : InputEvent) -> void:
-		#idk if this is needed?
-		pass;
-#		var dialog : ConfirmationDialog = _active["dialog"];
-#		var tree : Tree = _active["tree"];
-#		if !dialog || !tree:
-#			return;
-#		if evt.is_action(&"ui_cancel"):
-#			dialog.set_input_as_handled();
-#			dialog.queue_free();
-#		if evt.is_action(&"ui_accept") && !dialog.is_input_handled():
-#			dialog.set_input_as_handled();
-#		if !dialog.get_ok_button().disabled:
-#			_on_submitted();
 		
 	static func _on_selection_changed() -> void:
 		var dialog : ConfirmationDialog = _active["dialog"];
@@ -589,16 +606,16 @@ class Transactions extends RefCounted:
 	func connect_node(from_node : StringName, from_port : int, to_node : StringName, to_port : int, create_and_commit : bool = true):
 		if create_and_commit:
 			begin_transaction("Connect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		undo_redo.add_do_method(editor, &"connect_node", from_node, from_port, to_node, to_port);
-		undo_redo.add_undo_method(editor, &"disconnect_node", from_node, from_port, to_node, to_port);
+		undo_redo.add_do_method(editor, &"connect_node_and_notify", from_node, from_port, to_node, to_port);
+		undo_redo.add_undo_method(editor, &"disconnect_node_and_notify", from_node, from_port, to_node, to_port);
 		if create_and_commit:
 			end_transaction();
 	
 	func disconnect_node(from_node : StringName, from_port : int, to_node : StringName, to_port : int, create_and_commit : bool = true):
 		if create_and_commit:
 			begin_transaction("Disconnect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		undo_redo.add_do_method(editor, &"disconnect_node", from_node, from_port, to_node, to_port);
-		undo_redo.add_undo_method(editor, &"connect_node", from_node, from_port, to_node, to_port);
+		undo_redo.add_do_method(editor, &"disconnect_node_and_notify", from_node, from_port, to_node, to_port);
+		undo_redo.add_undo_method(editor, &"connect_node_and_notify", from_node, from_port, to_node, to_port);
 		if create_and_commit:
 			end_transaction();
 	
@@ -686,7 +703,7 @@ class Transactions extends RefCounted:
 		undo_redo.add_undo_method(from_node, &"connect", signal_name, callable, flags);
 		if create_and_commit:
 			end_transaction();
-
+			
 ### INTERFACE SIGNALS
 
 class InterfaceSignals extends RefCounted:
@@ -724,10 +741,9 @@ class InterfaceSignals extends RefCounted:
 		print(index);
 		
 	func _on_node_selected(node : Node) -> void:
-		print("node selected");
 		editor.selected_nodes.push_back(node.name);
+		editor.notify_selection_changed();
 	func _on_node_deselected(node : Node) -> void:
-		print("node deselected");
 		_deselect_node(node);
 	func _deselect_node(node : Node) -> void:
 		for i in range(editor.selected_nodes.size()):
@@ -735,15 +751,14 @@ class InterfaceSignals extends RefCounted:
 			if editor.selected_nodes[i] == node.name:
 				editor.selected_nodes.remove_at(i);
 				i -= 1;
+		editor.notify_selection_changed();
 	func _on_begin_node_move() -> void:
-		print("begin node move");
 		_dragging_across_frames = Input.is_key_pressed(Key.KEY_SHIFT);
 		if _dragging_across_frames:
 			for node_name in editor.selected_nodes:
 				editor.detach_graph_element_from_frame(node_name);
 		
 	func _on_end_node_move() -> void:
-		print("end node move");
 		_dragging_across_frames = Input.is_key_pressed(Key.KEY_SHIFT);
 		if _dragging_across_frames:
 			var mouse_pos := editor.get_local_mouse_position();
@@ -756,10 +771,15 @@ class InterfaceSignals extends RefCounted:
 				editor.transactions.attach_to_frame(node_name, hovered_frame.name if hovered_frame else &"");
 				
 	func _on_node_removed(node : Node) -> void:
-		print("node removed");
 		_deselect_node(node);
 	func _on_delete_nodes_request(nodes : Array[StringName]) -> void:
-		print("delete nodes request");
+		nodes = nodes.filter(
+			func (n : StringName) -> bool:
+				for hook in editor.hooks.filter_delete:
+					if !hook.can_delete(n):
+						return false;
+				return true;
+		);
 		editor.transactions.delete_nodes(nodes);
 
 ### FRAMES

@@ -2,16 +2,19 @@
 extends RefCounted
 
 static var ObjectSignalsNode : Script = preload("res://addons/signal-graphs/editor/elements/object_signals_graph_node.gd");
+static var ObjectSignalConnectionElement : Script = preload("res://addons/signal-graphs/editor/elements/object_signal_connection_graph_element.gd");
+static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-graphs/editor/hooks/signal_connection_property_edit.gd");
 const META_NAME_GRAPH_DATA := "_signal_graph_data";
 
 var editor : SignalGraphEditor;
+var _connections_with_elements : Array[Dictionary] = [];
 
 func _init(editor : GraphEdit):
 	self.editor = editor;
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["populate","drag_and_drop","configure_port_types","save"];
+	return ["populate","drag_and_drop","configure_port_types","save","filter_delete"];
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
@@ -60,7 +63,7 @@ func _add_graph_node_for_node(node : Node, recursive : bool = false, require_con
 
 func _populate_node_connections() -> void:
 	for child : Node in editor.get_children():
-		if child.get_script() != ObjectSignalsNode:
+		if !is_instance_of(child, ObjectSignalsNode):
 			continue;
 		
 		var graph_node : GraphNode = child;
@@ -82,7 +85,7 @@ func _populate_node_connections() -> void:
 			if owner is not Node:
 				continue;
 				
-			var owner_graph_node = get_graph_node_for_node(owner);
+			var owner_graph_node := get_graph_node_for_node(owner);
 			if !owner_graph_node:
 				continue;
 			
@@ -93,13 +96,13 @@ func _populate_node_connections() -> void:
 				continue;
 			
 			editor.connect_node(owner_graph_node.name, from_port, graph_node.name, to_port);
+	editor.notify_connections_changed();
 			
 ### CAPABILITY: save
 func save_to_scene(scene_root : Node) -> void:
 	for child : Node in editor.get_children():
-		if child.get_script() != ObjectSignalsNode:
+		if !is_instance_of(child, ObjectSignalsNode):
 			continue;
-		#TODO hooks?
 		var represented_object : Object = child.get_object();
 		if !represented_object:
 			continue;
@@ -122,7 +125,7 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 	editor.set_selected(null);
 	
 	for node_path : NodePath in data_dict["nodes"]:
-		var node := editor.get_node(node_path);
+		var node := editor.get_node_or_null(node_path);
 		if !node: continue;
 		
 		var instance_id := node.get_instance_id();
@@ -141,22 +144,23 @@ func connect_interface_signals() -> void:
 	editor.connection_drag_started.connect(_on_connection_drag_started);
 	editor.connection_request.connect(_on_connection_request);
 	editor.disconnection_request.connect(_on_disconnection_request);
+	editor.connections_changed.connect(_on_connections_changed);
+	editor.connections_layer.draw.connect(_on_connections_draw);
+	editor.selection_changed_with_script.connect(_on_selection_changed_with_script);
 	
 func _on_connection_drag_started(from_node_name : StringName, from_port : int, is_output : bool) -> void:
-	var node := editor.get_node(NodePath(from_node_name));
+	var node := editor.get_node_or_null(NodePath(from_node_name));
+	if !node: return;
 	
 	var graph_node : GraphNode = node;
-	var slot : int;
 	var slot_type : int;
 	if is_output:
-		slot = graph_node.get_output_port_slot(from_port);
-		slot_type = graph_node.get_slot_type_right(slot);
+		slot_type = graph_node.get_output_port_type(from_port);
 	else:
-		slot = graph_node.get_input_port_slot(from_port);
-		slot_type = graph_node.get_slot_type_left(slot);
+		slot_type = graph_node.get_input_port_type(from_port);
 		
-	var port_type_add_method = editor.port_type(&"add_method");
-	var port_type_add_signal = editor.port_type(&"add_signal");
+	var port_type_add_method := editor.port_type(&"add_method");
+	var port_type_add_signal := editor.port_type(&"add_signal");
 	
 	match slot_type:
 		port_type_add_method:
@@ -167,15 +171,17 @@ func _on_connection_drag_started(from_node_name : StringName, from_port : int, i
 			SignalGraphEditor.Selector.show(graph_node.get_object(), SignalGraphEditor.Selector.TAB_SIGNALS, Callable(graph_node, &"method_add_requested"), Callable(graph_node, &"signal_add_requested"));
 
 func _on_connection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
-	editor.transactions.begin_transaction("Connect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-	var from_node := editor.get_node(NodePath(from_node_name));
-	var to_node := editor.get_node(NodePath(to_node_name));
+	var from_graph_node := editor.get_node(NodePath(from_node_name));
+	var to_graph_node := editor.get_node(NodePath(to_node_name));
+	if !is_instance_of(from_graph_node, ObjectSignalsNode): return;
+	if !is_instance_of(to_graph_node, ObjectSignalsNode): return;
 	
-	# TODO VERY HARDCODED, check graph node types
-	var from_object : Object = from_node.get_object();
-	var to_object : Object = to_node.get_object();
-	var callable := Callable(to_object, to_node.get_method_port_name(to_port));
-	var signal_name : StringName = from_node.get_signal_port_name(from_port);
+	editor.transactions.begin_transaction("Connect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
+	
+	var from_object : Object = from_graph_node.get_object();
+	var to_object : Object = to_graph_node.get_object();
+	var callable := Callable(to_object, to_graph_node.get_method_port_name(to_port));
+	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
 	var undo_redo := EditorInterface.get_editor_undo_redo();
 	editor.transactions.connect_signal(from_object, signal_name, callable, CONNECT_PERSIST, false);
 	
@@ -183,17 +189,135 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	editor.transactions.end_transaction();
 
 func _on_disconnection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
-	editor.transactions.begin_transaction("Disconnect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-	var from_node := editor.get_node(NodePath(from_node_name));
-	var to_node := editor.get_node(NodePath(to_node_name));
+	var from_graph_node := editor.get_node(NodePath(from_node_name));
+	var to_graph_node := editor.get_node(NodePath(to_node_name));
+	if !is_instance_of(from_graph_node, ObjectSignalsNode): return;
+	if !is_instance_of(to_graph_node, ObjectSignalsNode): return;
 	
-	# TODO VERY HARDCODED, check graph node types
-	var from_object : Object = from_node.get_object();
-	var to_object : Object = to_node.get_object();
-	var callable := Callable(to_object, to_node.get_method_port_name(to_port));
-	var signal_name : StringName = from_node.get_signal_port_name(from_port);
+	editor.transactions.begin_transaction("Disconnect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
+	
+	var from_object : Object = from_graph_node.get_object();
+	var to_object : Object = to_graph_node.get_object();
+	var callable := Callable(to_object, to_graph_node.get_method_port_name(to_port));
+	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
 	var undo_redo := EditorInterface.get_editor_undo_redo();
 	editor.transactions.disconnect_signal(from_object, signal_name, callable, false);
 	
 	editor.transactions.disconnect_node(from_node_name, from_port, to_node_name, to_port, false);
 	editor.transactions.end_transaction();
+
+### CAPABILITY: filter_delete
+
+func can_delete(node_name : StringName) -> bool:
+	var node := editor.get_node(NodePath(node_name));
+	if is_instance_of(node, ObjectSignalConnectionElement):
+		return false;
+	return true;
+
+### CONNECTIONS
+
+func _on_connections_draw() -> void:
+	for cached_connection : Dictionary in _connections_with_elements:
+		var connection = cached_connection.connection;
+		if !is_instance_valid(cached_connection.graph_element): continue;
+		
+		_reposition_connection_element(connection, cached_connection.graph_element);
+
+func _on_connections_changed() -> void:
+	_refresh_connection_elements();
+
+func _refresh_connection_elements() -> void:
+	var intended_index := editor.connections_layer.get_index()+1;
+	
+	for cached_connection in _connections_with_elements:
+		cached_connection.still_valid = false;
+	
+	for connection : Dictionary in editor.connections:
+		var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
+		var to_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.to_node));
+		if !is_instance_of(from_graph_node, ObjectSignalsNode): continue;
+		if !is_instance_of(to_graph_node, ObjectSignalsNode): continue;
+		if from_graph_node.get_output_port_type(connection.from_port) != editor.port_type(&"signal"): continue;
+		if to_graph_node.get_input_port_type(connection.to_port) != editor.port_type(&"method"): continue;
+		
+		var graph_element : GraphElement = null;
+		
+		for cached_connection in _connections_with_elements:
+			if cached_connection.connection != connection: continue;
+			if !is_instance_valid(cached_connection.graph_element): continue;
+			if cached_connection.graph_element.is_queued_for_deletion(): continue;
+			cached_connection.still_valid = true;
+			graph_element = cached_connection.graph_element;
+		
+		if !graph_element:
+			graph_element = ObjectSignalConnectionElement.new();
+			graph_element.setup(connection, editor);
+			editor.connections_layer.add_sibling(graph_element, false);
+			_connections_with_elements.push_back({
+				"connection": connection,
+				"graph_element": graph_element,
+				"still_valid": true
+			});
+		
+		editor.move_child(graph_element, intended_index);
+		_reposition_connection_element(connection, graph_element);
+	
+	for i in range(_connections_with_elements.size()):
+		if i >= _connections_with_elements.size(): break;
+		var cached_connection := _connections_with_elements[i];
+		if !cached_connection.still_valid:
+			if is_instance_valid(cached_connection.graph_element):
+				if cached_connection.graph_element.get_parent():
+					editor.remove_child(cached_connection.graph_element);
+				cached_connection.graph_element.queue_free();
+			_connections_with_elements.remove_at(i);
+			i -= 1;
+
+func _reposition_connection_element(connection : Dictionary, graph_element : GraphElement) -> void:
+	var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
+	var to_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.to_node));
+	if !from_graph_node || !to_graph_node: return;
+	var line_from := (from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset);
+	var line_to := (to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset);
+	var line : PackedVector2Array = editor.get_connection_line(line_from, line_to);
+	var mid_point := line[line.size()/2] if line.size() % 2 == 1 else (line[line.size()/2-1]+line[line.size()/2])/2;
+	
+	var before_mid_point := line[line.size()/2-1] if line.size() % 2 == 1 else line[line.size()/2-1];
+	var after_mid_point := line[line.size()/2] if line.size() % 2 == 1 else line[line.size()/2];
+	var rotation := before_mid_point.angle_to_point(after_mid_point);
+	graph_element.reposition(mid_point, rotation);
+	graph_element.update_connection_info();
+
+### SELECTION
+
+func _on_selection_changed_with_script(script : Script, nodes : Array[Node]) -> void:
+	if script == ObjectSignalsNode:
+		select_nodes(nodes.map(func (graph_node : GraphNode):
+			return graph_node.get_object();
+		));
+	elif script == ObjectSignalConnectionElement:
+		select_connections(nodes.map(func (n : Node):
+			for cached_connection : Dictionary in _connections_with_elements:
+				if cached_connection.graph_element == n:
+					return cached_connection.connection;
+			return null;
+		).filter(func (c : Dictionary) -> bool:
+			var from_graph_node := editor.get_node_or_null(NodePath(c.from_node));
+			var to_graph_node := editor.get_node_or_null(NodePath(c.to_node));
+			return from_graph_node != null && to_graph_node != null;
+		));
+	elif script == null:
+		if is_instance_of(EditorInterface.get_inspector().get_edited_object(), SignalConnectionPropertyEdit):
+			EditorInterface.get_inspector().edit(null);
+
+func select_nodes(nodes : Array) -> void:
+	EditorInterface.get_selection().clear();
+	for node in nodes:
+		if node is not Node: continue;
+		EditorInterface.get_selection().add_node(node);
+
+func select_connections(connections : Array) -> void:
+	EditorInterface.get_selection().clear();
+	var edit_resource : Resource = SignalConnectionPropertyEdit.new();
+	edit_resource.setup(editor, connections);
+	EditorInterface.inspect_object(edit_resource);

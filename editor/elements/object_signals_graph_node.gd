@@ -2,7 +2,7 @@
 
 var node_instance_id : int;
 
-var _editor : SignalGraphEditor;
+var editor : SignalGraphEditor;
 var _method_ports : Dictionary[StringName, int];
 var _signal_ports : Dictionary[StringName, int];
 var _force_shown_methods : Array[StringName];
@@ -23,7 +23,7 @@ func get_object() -> Node:
 	return instance_from_id(node_instance_id) as Node;
 
 func setup(node : Node, saved_data : Dictionary, editor : SignalGraphEditor) -> bool:
-	_editor = editor;
+	self.editor = editor;
 	
 	node_instance_id = node.get_instance_id();
 	name = str(node_instance_id);
@@ -84,10 +84,10 @@ func _add_collapsible_panel() -> void:
 	add_child(_collapsible_panel);
 	set_slot(_collapsible_panel.get_index(),
 	true,
-		_editor.port_type(&"add_method"),
+		editor.port_type(&"add_method"),
 		Color(0x73f280ff),
 		true,
-		_editor.port_type(&"add_signal"),
+		editor.port_type(&"add_signal"),
 		Color(0xff786bff)
 	);
 
@@ -108,10 +108,10 @@ func add_signal_ports(node : Node) -> bool:
 		set_slot(
 			get_child_count()-1,
 			false,
-			_editor.port_type(&""),
+			editor.port_type(&""),
 			Color.BLACK,
 			true,
-			_editor.port_type(&"signal"),
+			editor.port_type(&"signal"),
 			Color(0xff786bff)
 		);
 		_signal_ports[signal_name] = left_port_index;
@@ -142,10 +142,10 @@ func add_method_ports(node : Node) -> bool:
 		set_slot(
 			get_child_count()-1,
 			true,
-			_editor.port_type(&"method"),
+			editor.port_type(&"method"),
 			Color(0x73f280ff),
 			false,
-			_editor.port_type(&""),
+			editor.port_type(&""),
 			Color.BLACK
 		);
 		_method_ports[method_name] = right_port_index;
@@ -222,12 +222,9 @@ func _create_icon_control(icon_name : String, height : int) -> Control:
 
 func _on_node_selected() -> void:
 	_update_collapsible_panel_visibility();
-	var node := get_object();
-	if node:
-		EditorInterface.edit_node(node);
 
 func _update_collapsible_panel_visibility():
-	_collapsible_panel.visible = selected && get_rect().has_point(_editor.get_local_mouse_position());
+	_collapsible_panel.visible = selected && get_rect().has_point(editor.get_local_mouse_position());
 	reset_size();
 
 func _on_node_deselected() -> void:
@@ -285,7 +282,7 @@ func _store_connections(disconnect : bool) -> void:
 	_stored_input_connections.clear();
 	_stored_output_connections.clear();
 	
-	for connection in _editor.get_connection_list():
+	for connection in editor.get_connection_list():
 		var from_node := connection["from_node"] as StringName;
 		var to_node := connection["to_node"] as StringName;
 		var from_port := connection["from_port"] as int;
@@ -300,16 +297,15 @@ func _store_connections(disconnect : bool) -> void:
 		print(_stored_input_connections[_stored_input_connections.size()-1]);
 			
 		if disconnect:
-			_editor.disconnect_node(from_node, from_port, to_node, to_port);
+			editor.disconnect_node(from_node, from_port, to_node, to_port);
 
 func _restore_connections():
 	for stored_connection in _stored_input_connections:
 		print("Restoring input connection: " + str(stored_connection));
-		stored_connection.restore_input(self, _editor);
+		stored_connection.restore_input(self, editor);
 	for stored_connection in _stored_output_connections:
 		print("Restoring output connection: " + str(stored_connection));
-		stored_connection.restore_output(self, _editor);
-		
+		stored_connection.restore_output(self, editor);
 
 class StoredConnection:
 	### The name of the method/signal that this connection was made with, in this node.
