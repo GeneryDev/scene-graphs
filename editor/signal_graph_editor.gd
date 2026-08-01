@@ -39,6 +39,7 @@ func _init():
 	
 	connections_layer = get_node(^"_connection_layer");
 	hooks = Hooks.new(self);
+	hooks._initialize_hooks();
 
 ### CORE
 
@@ -172,90 +173,192 @@ func get_default_connection_line(from_position: Vector2, to_position: Vector2, c
 		return curve.tessellate(5, 2.0);
 	else:
 		return curve.tessellate(1);
-		
+
+### Editor Settings
+
+const PROJECT_SETTING_NAME_HOOKS := &"signal_graphs/hooks/hook_scripts";
+
+static func add_project_settings() -> void:
+	if !ProjectSettings.get_setting(PROJECT_SETTING_NAME_HOOKS):
+		ProjectSettings.set_setting(PROJECT_SETTING_NAME_HOOKS, [] as Array[String]);
+	ProjectSettings.add_property_info({
+		"name": PROJECT_SETTING_NAME_HOOKS,
+		"type": TYPE_ARRAY,
+		"hint": PROPERTY_HINT_TYPE_STRING,
+		"hint_string": "{0}/{1}:*.gd,*.cs".format([TYPE_STRING,PROPERTY_HINT_FILE])
+	});
+	ProjectSettings.set_initial_value(PROJECT_SETTING_NAME_HOOKS, [] as Array[String]);
+
+### HOOKS
+
 class Hooks extends RefCounted:
 	const METHOD_NAME_GET_CAPABILITIES : StringName = &"get_signal_graph_capabilities"
-	const methods_required_per_capability : Dictionary = {
-		"populate": [
-			&"populate_from_scene"
-		],
-		"drag_and_drop": [
-			&"can_drop_data",
-			&"drop_data"
-		],
-		"configure_port_types": [
-			&"configure_port_types"
-		],
-		"save": [
-			&"save_to_scene"
-		],
-		"filter_delete": [
-			&"can_delete"
-		],
-		"override_connection_lines": [
-			&"get_connection_line"
-		]
+	const META_NAME_GRANTED_CAPABILITIES : StringName = &"_signal_graph_granted_capabilities"
+	var _capabilities : Dictionary = {
+		"configure_capabilities": {
+			"required_methods": [
+				&"configure_capabilities"
+			],
+			"hooks": [] as Array[Object],
+			"is_meta": true
+		},
+		"populate": {
+			"required_methods": [
+				&"populate_from_scene"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"drag_and_drop": {
+			"required_methods": [
+				&"can_drop_data",
+				&"drop_data"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"configure_port_types": {
+			"required_methods": [
+				&"configure_port_types"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"save": {
+			"required_methods": [
+				&"save_to_scene"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"filter_delete": {
+			"required_methods": [
+				&"can_delete"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"override_connection_lines": {
+			"required_methods": [
+				&"get_connection_line"
+			],
+			"hooks": [] as Array[Object]
+		}
 	};
 	
 	var editor : SignalGraphEditor;
-	
-	var populate : Array[Object] = [];
-	var drag_and_drop : Array[Object] = [];
-	var configure_port_types : Array[Object] = [];
-	var save : Array[Object] = [];
-	var filter_delete : Array[Object] = [];
-	var override_connection_lines : Array[Object] = [];
+	var _hooks : Array[Object];
 	
 	func _init(editor : GraphEdit):
 		self.editor = editor;
 		
+		_add_builtin_hooks();
+		_add_hooks_from_project_settings();
+	
+	func _initialize_hooks() -> void:
+		# First pass: Meta capabilities
+		for hook in _hooks:
+			_init_hook_meta(hook);
+		
+		# Second pass: Regular capabilities
+		for hook in _hooks:
+			_init_hook(hook);
+		
+	func _add_builtin_hooks() -> void:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_signals.gd"));
+		
+	func _add_hooks_from_project_settings() -> void:
+		if !ProjectSettings.get_setting(PROJECT_SETTING_NAME_HOOKS): return;
+		var scripts_list = ProjectSettings.get_setting(PROJECT_SETTING_NAME_HOOKS);
+		for script_path in scripts_list:
+			if !script_path: continue;
+			add_hook(load(script_path));
 	
 	func add_hook(script : Script) -> bool:
 		var instance : Object = script.new(editor);
+		if !instance:
+			printerr("Failed to instantiate script " + script.resource_path + " as a signal graph hook: Requires a constructor that takes 1 argument.");
+			return false;
 		if !instance.has_method(METHOD_NAME_GET_CAPABILITIES):
 			printerr("Could not add script " + script.resource_path + " as a signal graph hook: Does not implement required method '" + str(METHOD_NAME_GET_CAPABILITIES) + "'");
 			return false;
 		
-		var capabilities : Array[String] = instance.call(METHOD_NAME_GET_CAPABILITIES);
-		
-		var all_capabilities := {
-			"populate": populate,
-			"drag_and_drop": drag_and_drop,
-			"configure_port_types": configure_port_types,
-			"save": save,
-			"filter_delete": filter_delete,
-			"override_connection_lines": override_connection_lines
-		};
-		
-		var granted_capabilities : Array[String] = [];
-		
-		for capability in capabilities:
-			if !all_capabilities.has(capability):
-				printerr("Invalid signal graph hook capability '" + capability + "' in script " + script.resource_path);
-				continue;
-			var list : Array[Object] = all_capabilities[capability];
-			if list.has(instance):
-				printerr("Duplicate signal graph hook capability '" + capability + "' in script " + script.resource_path);
-				continue;
-			var required_methods : Array = methods_required_per_capability[capability];
-			var missing_any := false;
-			for required_method_name : StringName in required_methods:
-				if !instance.has_method(required_method_name):
-					printerr("Missing method '" + str(required_method_name) + "', required for signal graph hook capability '" + capability + "' in script " + script.resource_path);
-					missing_any = true;
-					continue;
-			
-			if missing_any:
-				printerr("Skipping signal graph hook capability '" + capability + "' in script " + script.resource_path + " due to missing required methods.");
-				continue;
-			
-			granted_capabilities.push_back(capability);
-			list.push_back(instance);
-			
-		print("Added signal graph hook script: " + script.resource_path + " with capabilities: " + str(granted_capabilities));
+		_hooks.append(instance);
 		
 		return true;
+	
+	# First pass: Meta capabilities
+	func _init_hook_meta(instance : Object) -> bool:
+		var script := instance.get_script();
+		var hook_capabilities : Array[String] = instance.call(METHOD_NAME_GET_CAPABILITIES);
+		
+		for capability in hook_capabilities:
+			if !_is_meta_capability(capability): continue;
+			if _get_granted_capabilities(instance).has(capability): continue;
+			if _validate_capability(instance, script, capability):
+				_grant_capability(instance, script, capability);
+				instance.configure_capabilities();
+		
+		return true;
+	
+	# Second pass: Regular capabilities
+	func _init_hook(instance : Object) -> bool:
+		var script := instance.get_script();
+		var hook_capabilities : Array[String] = instance.call(METHOD_NAME_GET_CAPABILITIES);
+		
+		for capability in hook_capabilities:
+			if _is_meta_capability(capability): continue;
+			if _get_granted_capabilities(instance).has(capability): continue;
+			if _validate_capability(instance, script, capability):
+				_grant_capability(instance, script, capability);
+			
+		print("Initialized signal graph hook script: " + script.resource_path + " with capabilities: " + str(_get_granted_capabilities(instance)));
+		return true;
+	
+	func _is_meta_capability(capability : String) -> bool:
+		return _capabilities.has(capability) && _capabilities[capability].get("is_meta");
+	
+	func _validate_capability(instance : Object, script : Script, capability : String) -> bool:
+		if !_capabilities.has(capability):
+			printerr("Invalid signal graph hook capability '" + capability + "' in script " + script.resource_path);
+			return false;
+		var list : Array[Object] = _capabilities[capability].hooks;
+		if list.has(instance):
+			printerr("Duplicate signal graph hook capability '" + capability + "' in script " + script.resource_path);
+			return false;
+		var required_methods : Array = _capabilities[capability].required_methods;
+		var missing_any := false;
+		for required_method_name : StringName in required_methods:
+			if !instance.has_method(required_method_name):
+				printerr("Missing method '" + str(required_method_name) + "', required for signal graph hook capability '" + capability + "' in script " + script.resource_path);
+				missing_any = true;
+				continue;
+		
+		if missing_any:
+			printerr("Skipping signal graph hook capability '" + capability + "' in script " + script.resource_path + " due to missing required methods.");
+			return false;
+		
+		return true;
+	
+	func register_capability(name : String, required_methods : Array[StringName]) -> bool:
+		if _capabilities.has(name):
+			printerr("Failed to register capability '" + name + "': another capability with the same name is already registered!");
+			return false;
+		
+		_capabilities[name] = {
+			"required_methods": required_methods,
+			"hooks": [] as Array[Object]
+		};
+		return true;
+	
+	func _grant_capability(instance : Object, script : Script, capability : String) -> void:
+		_get_granted_capabilities(instance).push_back(capability);
+		_capabilities[capability].hooks.push_back(instance);
+	
+	func _get_granted_capabilities(instance : Object) -> Array[String]:
+		var granted_capabilities : Array[String] = instance.get_meta(META_NAME_GRANTED_CAPABILITIES, [] as Array[String]) as Array[String];
+		instance.set_meta(META_NAME_GRANTED_CAPABILITIES, granted_capabilities);
+		return granted_capabilities;
+	
+	func _get(property: StringName) -> Variant:
+		if _capabilities.has(property as String):
+			return _capabilities[property as String].hooks;
+		return null;
 	
 class Selector extends RefCounted:
 	const TAB_METHODS := 0;
@@ -690,10 +793,9 @@ class Transactions extends RefCounted:
 			begin_transaction("Delete graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
 		
 		# First, remove connections
-		var connection_list := editor.get_connection_list();
+		var connection_list : Array[Dictionary] = editor.get_connection_list().duplicate();
 		for node_name in nodes:
-			for i in range(connection_list.size()):
-				if i >= connection_list.size(): break;
+			for i in range(connection_list.size()-1, -1, -1):
 				var connection := connection_list[i];
 				var from_node := connection["from_node"] as StringName;
 				var to_node := connection["to_node"] as StringName;
@@ -703,7 +805,6 @@ class Transactions extends RefCounted:
 					disconnect_node(from_node, from_port, to_node, to_port, false);
 					
 					connection_list.remove_at(i);
-					i -= 1;
 		
 		# Then, remove frame attachments
 		for node_name in nodes:
@@ -793,11 +894,9 @@ class InterfaceSignals extends RefCounted:
 	func _on_node_deselected(node : Node) -> void:
 		_deselect_node(node);
 	func _deselect_node(node : Node) -> void:
-		for i in range(editor.selected_nodes.size()):
-			if i >= editor.selected_nodes.size(): break;
+		for i in range(editor.selected_nodes.size()-1, -1, -1):
 			if editor.selected_nodes[i] == node.name:
 				editor.selected_nodes.remove_at(i);
-				i -= 1;
 		editor.notify_selection_changed();
 	func _on_begin_node_move() -> void:
 		editor.dragging = true;

@@ -271,8 +271,7 @@ func _refresh_connection_elements() -> void:
 		editor.move_child(graph_element, intended_index);
 		_reposition_connection_element(connection, graph_element);
 	
-	for i in range(_connections_with_elements.size()):
-		if i >= _connections_with_elements.size(): break;
+	for i in range(_connections_with_elements.size()-1, -1, -1):
 		var cached_connection := _connections_with_elements[i];
 		if !cached_connection.still_valid:
 			if is_instance_valid(cached_connection.graph_element):
@@ -280,7 +279,6 @@ func _refresh_connection_elements() -> void:
 					editor.remove_child(cached_connection.graph_element);
 				cached_connection.graph_element.queue_free();
 			_connections_with_elements.remove_at(i);
-			i -= 1;
 
 func _reposition_connection_element(connection : Dictionary, graph_element : GraphElement) -> void:
 	var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
@@ -331,6 +329,7 @@ func select_nodes(nodes : Array) -> void:
 	EditorInterface.get_selection().clear();
 	for node in nodes:
 		if node is not Node: continue;
+		if !node.is_inside_tree(): continue;
 		EditorInterface.get_selection().add_node(node);
 
 func select_connections(connections : Array) -> void:
@@ -398,8 +397,8 @@ func _on_begin_node_move() -> void:
 			cached_connection.graph_element.dragging_reference_mid_point = cached_connection.graph_element.position_offset - cached_connection.graph_element.mid_point_offset;
 			
 			var neighbor_selected_count := 0;
-			if cached_connection.graph_element.get_from_graph_node().selected: neighbor_selected_count += 1;
-			if cached_connection.graph_element.get_to_graph_node().selected: neighbor_selected_count += 1;
+			if cached_connection.graph_element.get_from_graph_node() && cached_connection.graph_element.get_from_graph_node().selected: neighbor_selected_count += 1;
+			if cached_connection.graph_element.get_to_graph_node() && cached_connection.graph_element.get_to_graph_node().selected: neighbor_selected_count += 1;
 			
 			cached_connection.graph_element.dragging_mid_point_influence = 1 - neighbor_selected_count * 0.5;
 
