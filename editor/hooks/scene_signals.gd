@@ -159,7 +159,7 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 	for node_path : NodePath in data_dict["nodes"]:
 		var node := editor.get_node_or_null(node_path);
 		if !node: continue;
-		view_interface.transactions.add_node_view(node, editor.utility.local_to_graph_position(at_position));
+		view_interface.transactions.add_object_view(node, editor.utility.local_to_graph_position(at_position));
 
 ### INTERFACE SIGNALS
 
@@ -238,7 +238,7 @@ func _on_delete_nodes_request(graph_nodes : Array[StringName]) -> void:
 		var graph_node := editor.get_node_or_null(NodePath(graph_node_name));
 		if !is_instance_of(graph_node, ObjectSignalsNode): continue;
 		var obj : Object = graph_node.get_object();
-		view_interface.transactions.remove_node_view(obj);
+		view_interface.transactions.remove_object_view(obj);
 
 ### CONNECTIONS
 
@@ -659,38 +659,38 @@ class ViewInterface extends RefCounted:
 			self.editor = editor;
 			self.view_interface = view_interface;
 			
-		func add_node_view(node : Node, position_offset : Vector2) -> void:
-			if view_interface.has_object_view(node):
-				view_interface.select_object(node);
+		func add_object_view(obj : Object, position_offset : Vector2) -> void:
+			if view_interface.has_object_view(obj):
+				view_interface.select_object(obj);
 			else:
-				view_interface.add_object_view(node);
-				var obj_view := view_interface.get_object_view(node);
+				view_interface.add_object_view(obj);
+				var obj_view := view_interface.get_object_view(obj);
 				obj_view["position_offset"] = position_offset;
-				view_interface.update_object_view_members_with_rules(node);
+				view_interface.update_object_view_members_with_rules(obj);
 				view_interface.notify_view_updated();
-				view_interface.select_object(node);
+				view_interface.select_object(obj);
 				
 				editor.transactions.begin_transaction("Add node view", UndoRedo.MERGE_ALL, null, false);
 				var undo_redo := editor.transactions.undo_redo;
-				undo_redo.add_do_method(view_interface, &"set_object_view", node, obj_view);
+				undo_redo.add_do_method(view_interface, &"set_object_view", obj, obj_view);
 				undo_redo.add_do_method(view_interface, &"notify_view_updated");
-				undo_redo.add_do_method(view_interface, &"select_object", node);
-				undo_redo.add_undo_method(view_interface, &"remove_object_view", node);
+				undo_redo.add_do_method(view_interface, &"select_object", obj);
+				undo_redo.add_undo_method(view_interface, &"remove_object_view", obj);
 				undo_redo.add_undo_method(view_interface, &"notify_view_updated");
 				editor.transactions.end_transaction(false);
 		
-		func remove_node_view(node : Node) -> void:
-			if !view_interface.has_object_view(node):
+		func remove_object_view(obj : Object) -> void:
+			if !view_interface.has_object_view(obj):
 				return;
-			var obj_view := view_interface.get_object_view(node);
+			var obj_view := view_interface.get_object_view(obj);
 			
 			editor.transactions.begin_transaction("Remove node view", UndoRedo.MERGE_ALL, null, false);
 			var undo_redo := editor.transactions.undo_redo;
-			undo_redo.add_do_method(view_interface, &"remove_object_view", node);
+			undo_redo.add_do_method(view_interface, &"remove_object_view", obj);
 			undo_redo.add_do_method(view_interface, &"notify_view_updated");
-			undo_redo.add_undo_method(view_interface, &"set_object_view", node, obj_view);
+			undo_redo.add_undo_method(view_interface, &"set_object_view", obj, obj_view);
 			undo_redo.add_undo_method(view_interface, &"notify_view_updated");
-			undo_redo.add_undo_method(view_interface, &"select_object", node);
+			undo_redo.add_undo_method(view_interface, &"select_object", obj);
 			editor.transactions.end_transaction();
 		
 		func add_object_view_method(obj : Object, method_name : StringName) -> void:

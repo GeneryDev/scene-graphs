@@ -6,8 +6,11 @@ var editor : SignalGraphEditor;
 var view_interface;
 var _method_ports : Dictionary[StringName, int];
 var _signal_ports : Dictionary[StringName, int];
+var _method_slots : Dictionary[StringName, int];
+var _signal_slots : Dictionary[StringName, int];
 
 var _collapsible_panel : Control;
+var _connections_not_in_view : Array = [];
 
 func _init(obj : Object, editor : SignalGraphEditor, view_interface):
 	self.editor = editor;
@@ -17,7 +20,7 @@ func _init(obj : Object, editor : SignalGraphEditor, view_interface):
 	name = str(obj_instance_id);
 	title = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 	
-	var icon := editor.utility.get_object_icon(obj);
+	var icon := SignalGraphEditor.Utility.get_object_icon(obj);
 	if icon:
 		var icon_rect := TextureRect.new();
 		icon_rect.texture = icon;
@@ -26,6 +29,8 @@ func _init(obj : Object, editor : SignalGraphEditor, view_interface):
 	
 	_signal_ports = {};
 	_method_ports = {};
+	_signal_slots = {};
+	_method_slots = {};
 	
 	# Create collapsible panel
 	_collapsible_panel = VBoxContainer.new();
@@ -40,6 +45,53 @@ func _init(obj : Object, editor : SignalGraphEditor, view_interface):
 
 func get_object() -> Object:
 	return instance_from_id(obj_instance_id) as Object;
+
+func _enter_tree() -> void:
+	editor.connections_changed.connect(_update_connection_cache);
+	_update_connection_cache();
+func _exit_tree() -> void:
+	editor.connections_changed.disconnect(_update_connection_cache);
+
+func _update_connection_cache() -> void:
+	_connections_not_in_view.clear();
+	var obj := get_object();
+	var obj_view = view_interface.get_object_view(obj);
+
+	var incoming_connections := obj.get_incoming_connections();
+	var seen_method_names : Array = [];
+	
+	for method_info in obj.get_method_list():
+		var method_name := method_info["name"] as StringName;
+		if seen_method_names.has(method_name): continue;
+		seen_method_names.append(method_name);
+		if !obj_view.methods.has(method_name): continue;
+		
+		for method_connection in incoming_connections:
+			if(method_connection.flags & CONNECT_PERSIST) == 0: continue;
+			if method_connection.callable.get_method() as StringName != method_name: continue;
+			var sgnal : Signal = method_connection.signal;
+			var source : Object = sgnal.get_object();
+			if !view_interface.has_object_view(source):
+				_connections_not_in_view.append({
+					"port_type": editor.port_type(&"method"),
+					"member_name": method_name,
+					"other_instance_id": source.get_instance_id()
+				});
+	
+	for signal_info in obj.get_signal_list():
+		var signal_name := signal_info["name"] as StringName;
+		if !obj_view.signals.has(signal_name): continue;
+		
+		for signal_connection in obj.get_signal_connection_list(signal_name):
+			if(signal_connection.flags & CONNECT_PERSIST) == 0: continue;
+			var callable : Callable = signal_connection.callable;
+			var target : Object = callable.get_object();
+			if !view_interface.has_object_view(target):
+				_connections_not_in_view.append({
+					"port_type": editor.port_type(&"signal"),
+					"member_name": signal_name,
+					"other_instance_id": target.get_instance_id()
+				});
 
 func update_from_view() -> void:
 	var obj := get_object();
@@ -115,8 +167,9 @@ func add_signal_ports(obj : Object, obj_view : Dictionary) -> bool:
 		row_control.tooltip_text = "Signal: " + SignalGraphEditor.Utility.get_method_signature_text(signal_info);
 		add_child(row_control);
 		
+		var slot_index := get_child_count()-1;
 		set_slot(
-			get_child_count()-1,
+			slot_index,
 			false,
 			editor.port_type(&""),
 			Color.BLACK,
@@ -125,6 +178,7 @@ func add_signal_ports(obj : Object, obj_view : Dictionary) -> bool:
 			Color(0xff786bff)
 		);
 		_signal_ports[signal_name] = left_port_index;
+		_signal_slots[signal_name] = slot_index;
 		
 		left_port_index += 1;
 		any_ports = true;
@@ -145,8 +199,9 @@ func add_method_ports(obj : Object, obj_view : Dictionary) -> bool:
 		row_control.tooltip_text = "Method: " + SignalGraphEditor.Utility.get_method_signature_text(method_info);
 		add_child(row_control);
 		
+		var slot_index := get_child_count()-1;
 		set_slot(
-			get_child_count()-1,
+			slot_index,
 			true,
 			editor.port_type(&"method"),
 			Color(0x73f280ff),
@@ -155,6 +210,7 @@ func add_method_ports(obj : Object, obj_view : Dictionary) -> bool:
 			Color.BLACK
 		);
 		_method_ports[method_name] = right_port_index;
+		_method_slots[method_name] = slot_index;
 		
 		right_port_index += 1;
 		any_ports = true;
@@ -170,8 +226,8 @@ func _create_row(icon_left : String, text : String, icon_right : String) -> Cont
 	label.size_flags_horizontal = SIZE_EXPAND_FILL;
 	var height := label.get_minimum_size().y;
 	
-	var icon_rect_left := _create_icon_control(icon_left, height);
-	var icon_rect_right := _create_icon_control(icon_right, height);
+	var icon_rect_left := _create_icon_control(icon_left, int(height));
+	var icon_rect_right := _create_icon_control(icon_right, int(height));
 	var max_minimum_size := Vector2(
 		max(icon_rect_left.get_minimum_size().x, icon_rect_right.get_minimum_size().x),
 		max(icon_rect_left.get_minimum_size().y, icon_rect_right.get_minimum_size().y)
@@ -226,6 +282,18 @@ func get_method_port_name(port_id : int) -> StringName:
 			return key;
 	return &"";
 
+func get_signal_slot_name(slot_index : int) -> StringName:
+	for key in _signal_slots:
+		if _signal_slots[key] == slot_index:
+			return key;
+	return &"";
+
+func get_method_slot_name(slot_index : int) -> StringName:
+	for key in _method_slots:
+		if _method_slots[key] == slot_index:
+			return key;
+	return &"";
+
 func method_add_requested(method_info : Dictionary) -> void:
 	var method_name := method_info["name"] as StringName;
 	view_interface.transactions.add_object_view_method(get_object(), method_name);
@@ -236,3 +304,27 @@ func signal_add_requested(signal_info : Dictionary) -> void:
 
 func _on_position_offset_changed() -> void:
 	update_view();
+	
+func _draw_port(slot_index: int, position: Vector2i, left: bool, color: Color) -> void:
+	# default drawing
+	var port_icon := get_slot_custom_icon_left(slot_index) if left else get_slot_custom_icon_right(slot_index);
+	if !port_icon:
+		port_icon = get_theme_icon("port");
+		
+	if !port_icon:
+		return;
+
+	var icon_offset : Vector2;
+	icon_offset = -port_icon.get_size() * 0.5;
+	draw_texture(port_icon, Vector2(position) + icon_offset, color);
+	
+	# connection line not in view
+	var searching_port_type := editor.port_type(&"method") if left else editor.port_type(&"signal");
+	var searching_slot_member_name := get_method_slot_name(slot_index) if left else get_signal_slot_name(slot_index);
+	var found_connection_index := _connections_not_in_view.find_custom(func (c : Dictionary) -> bool:
+		return c.port_type == searching_port_type && c.member_name == searching_slot_member_name;
+	);
+	if found_connection_index != -1:
+		var line_dir := Vector2(-1, 0) if left else Vector2(1, 0);
+		var line_length := 40;
+		draw_polyline_colors([Vector2(position), Vector2(position) + line_dir * line_length], [color, color * Color(1,1,1,0)], 4, true);
