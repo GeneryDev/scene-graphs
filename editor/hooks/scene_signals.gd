@@ -18,7 +18,7 @@ func _init(editor : GraphEdit):
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["populate","drag_and_drop","configure_port_types","save","filter_delete","override_connection_lines"];
+	return ["populate","drag_and_drop","configure_port_types","save","override_connection_lines"];
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
@@ -60,6 +60,14 @@ func _populate_graph_nodes_from_view() -> void:
 			graph_node = _create_graph_node_for_object_from_view(obj);
 			if graph_node:
 				editor.add_child(graph_node);
+	
+	for child : Node in editor.get_children():
+		if !is_instance_of(child, ObjectSignalsNode):
+			continue;
+		var instance_id := int(child.name);
+		if !scene_object_views.has(instance_id):
+			editor.remove_child(child);
+			child.queue_free();
 	
 func _populate_graph_node_members_from_view() -> void:
 	var scene_object_views := view_interface.get_scene_object_views();
@@ -142,19 +150,7 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 	for node_path : NodePath in data_dict["nodes"]:
 		var node := editor.get_node_or_null(node_path);
 		if !node: continue;
-		
-		var existing_graph_node : GraphNode = get_graph_node_for_node(node);
-		
-		if existing_graph_node:
-			existing_graph_node.set_selected(true);
-		else:
-			view_interface.add_object_view(node);
-			var obj_view := view_interface.get_object_view(node);
-			obj_view["position_offset"] = editor.utility.local_to_graph_position(at_position);
-			view_interface.update_object_view_members_with_rules(node);
-			view_interface.notify_view_updated();
-			var graph_node := get_graph_node_for_node(node)
-			graph_node.set_selected(true);
+		view_interface.transactions.add_node_view(node, editor.utility.local_to_graph_position(at_position));
 
 ### INTERFACE SIGNALS
 
@@ -166,6 +162,7 @@ func connect_interface_signals() -> void:
 	editor.connections_layer.draw.connect(_on_connections_draw);
 	editor.selection_changed_with_script.connect(_on_selection_changed_with_script);
 	editor.begin_node_move.connect(_on_begin_node_move);
+	editor.delete_nodes_request.connect(_on_delete_nodes_request);
 	editor.end_node_move.connect(_on_end_node_move);
 	editor.visibility_changed.connect(_on_visibility_changed);
 	
@@ -197,7 +194,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	if !is_instance_of(from_graph_node, ObjectSignalsNode): return;
 	if !is_instance_of(to_graph_node, ObjectSignalsNode): return;
 	
-	editor.transactions.begin_transaction("Connect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
+	editor.transactions.begin_transaction("Connect signal", UndoRedo.MergeMode.MERGE_ALL, null, false);
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
@@ -205,7 +202,8 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
 	editor.transactions.connect_signal(from_object, signal_name, callable, CONNECT_PERSIST, false);
 	
-	editor.transactions.connect_node(from_node_name, from_port, to_node_name, to_port, false);
+	editor.transactions.undo_redo.add_do_method(view_interface, &"notify_view_updated");
+	editor.transactions.undo_redo.add_undo_method(view_interface, &"notify_view_updated");
 	editor.transactions.end_transaction();
 
 func _on_disconnection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
@@ -214,7 +212,7 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	if !is_instance_of(from_graph_node, ObjectSignalsNode): return;
 	if !is_instance_of(to_graph_node, ObjectSignalsNode): return;
 	
-	editor.transactions.begin_transaction("Disconnect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
+	editor.transactions.begin_transaction("Disconnect signal", UndoRedo.MergeMode.MERGE_ALL, null, false);
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
@@ -222,16 +220,18 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
 	editor.transactions.disconnect_signal(from_object, signal_name, callable, false);
 	
-	editor.transactions.disconnect_node(from_node_name, from_port, to_node_name, to_port, false);
+	editor.transactions.undo_redo.add_do_method(view_interface, &"notify_view_updated");
+	editor.transactions.undo_redo.add_undo_method(view_interface, &"notify_view_updated");
 	editor.transactions.end_transaction();
 
-### CAPABILITY: filter_delete
+### DELETING
 
-func can_delete(node_name : StringName) -> bool:
-	var node := editor.get_node(NodePath(node_name));
-	if is_instance_of(node, ObjectSignalConnectionElement):
-		return false;
-	return true;
+func _on_delete_nodes_request(graph_nodes : Array[StringName]) -> void:
+	for graph_node_name : StringName in graph_nodes:
+		var graph_node := editor.get_node_or_null(NodePath(graph_node_name));
+		if !is_instance_of(graph_node, ObjectSignalsNode): continue;
+		var obj : Object = graph_node.get_object();
+		view_interface.transactions.remove_node_view(obj);
 
 ### CONNECTIONS
 
@@ -425,9 +425,11 @@ class ViewInterface extends RefCounted:
 	signal view_updated();
 	
 	var editor : SignalGraphEditor;
+	var transactions : Transactions;
 	
 	func _init(editor : GraphEdit):
 		self.editor = editor;
+		transactions = Transactions.new(editor, self);
 	
 	func notify_view_updated() -> void:
 		view_updated.emit();
@@ -450,6 +452,13 @@ class ViewInterface extends RefCounted:
 			"methods": [],
 			"signals": [],
 		};
+		scene_object_views[instance_id] = obj_view;
+		return true;
+		
+	func set_object_view(obj : Object, obj_view : Dictionary) -> bool:
+		if !obj: return false;
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
 		scene_object_views[instance_id] = obj_view;
 		return true;
 		
@@ -621,3 +630,54 @@ class ViewInterface extends RefCounted:
 			list.append(signal_name);
 		
 		return list;
+			
+	func get_graph_node_for_object(obj : Object) -> GraphNode:
+		return editor.get_node_or_null(NodePath(str(obj.get_instance_id()))) as GraphNode;
+	
+	func select_object(obj : Object) -> void:
+		var existing_graph_node : GraphNode = get_graph_node_for_object(obj);
+		if existing_graph_node:
+			existing_graph_node.set_selected(true);
+	
+	class Transactions extends RefCounted:
+		
+		var editor : SignalGraphEditor;
+		var view_interface : ViewInterface;
+		
+		func _init(editor : GraphEdit, view_interface : ViewInterface):
+			self.editor = editor;
+			self.view_interface = view_interface;
+			
+		func add_node_view(node : Node, position_offset : Vector2) -> void:
+			if view_interface.has_object_view(node):
+				view_interface.select_object(node);
+			else:
+				view_interface.add_object_view(node);
+				var obj_view := view_interface.get_object_view(node);
+				obj_view["position_offset"] = position_offset;
+				view_interface.update_object_view_members_with_rules(node);
+				view_interface.notify_view_updated();
+				view_interface.select_object(node);
+				
+				editor.transactions.begin_transaction("Add node view", UndoRedo.MERGE_ALL, null, false);
+				var undo_redo := editor.transactions.undo_redo;
+				undo_redo.add_do_method(view_interface, &"set_object_view", node, obj_view);
+				undo_redo.add_do_method(view_interface, &"notify_view_updated");
+				undo_redo.add_do_method(view_interface, &"select_object", node);
+				undo_redo.add_undo_method(view_interface, &"remove_object_view", node);
+				undo_redo.add_undo_method(view_interface, &"notify_view_updated");
+				editor.transactions.end_transaction(false);
+		
+		func remove_node_view(node : Node) -> void:
+			if !view_interface.has_object_view(node):
+				return;
+			var obj_view := view_interface.get_object_view(node);
+			
+			editor.transactions.begin_transaction("Remove node view", UndoRedo.MERGE_ALL, null, false);
+			var undo_redo := editor.transactions.undo_redo;
+			undo_redo.add_do_method(view_interface, &"remove_object_view", node);
+			undo_redo.add_do_method(view_interface, &"notify_view_updated");
+			undo_redo.add_undo_method(view_interface, &"set_object_view", node, obj_view);
+			undo_redo.add_undo_method(view_interface, &"notify_view_updated");
+			undo_redo.add_undo_method(view_interface, &"select_object", node);
+			editor.transactions.end_transaction();

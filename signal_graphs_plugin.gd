@@ -76,9 +76,13 @@ class Settings extends RefCounted:
 	
 	var plugin_mode : PluginMode:
 		get:
+			if !ProjectSettings.has_setting(PROJECT_SETTING_PLUGIN_MODE):
+				return 0 as PluginMode;
 			return ProjectSettings.get_setting(PROJECT_SETTING_PLUGIN_MODE);
 	var hook_scripts : Array[String]:
 		get:
+			if !ProjectSettings.has_setting(PROJECT_SETTING_HOOK_SCRIPTS):
+				return [] as Array[String];
 			return ProjectSettings.get_setting(PROJECT_SETTING_HOOK_SCRIPTS);
 	
 	var _last_used_settings : Dictionary;

@@ -144,10 +144,10 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 		hook.drop_data(at_position, data);
 
 func _get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
-	for hook in hooks.override_connection_lines:
-		var override = hook.get_connection_line(from_position, to_position);
-		if override:
-			return override;
+#	for hook in hooks.override_connection_lines:
+#		var override = hook.get_connection_line(from_position, to_position);
+#		if override:
+#			return override;
 	return get_default_connection_line(from_position, to_position);
 
 func get_default_connection_line(from_position: Vector2, to_position: Vector2, curvature : float = -1) -> PackedVector2Array:
@@ -724,22 +724,6 @@ class Transactions extends RefCounted:
 		if create_and_commit:
 			end_transaction();
 	
-	func connect_node(from_node : StringName, from_port : int, to_node : StringName, to_port : int, create_and_commit : bool = true):
-		if create_and_commit:
-			begin_transaction("Connect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		undo_redo.add_do_method(editor, &"connect_node_and_notify", from_node, from_port, to_node, to_port);
-		undo_redo.add_undo_method(editor, &"disconnect_node_and_notify", from_node, from_port, to_node, to_port);
-		if create_and_commit:
-			end_transaction();
-	
-	func disconnect_node(from_node : StringName, from_port : int, to_node : StringName, to_port : int, create_and_commit : bool = true):
-		if create_and_commit:
-			begin_transaction("Disconnect graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		undo_redo.add_do_method(editor, &"disconnect_node_and_notify", from_node, from_port, to_node, to_port);
-		undo_redo.add_undo_method(editor, &"connect_node_and_notify", from_node, from_port, to_node, to_port);
-		if create_and_commit:
-			end_transaction();
-	
 	func attach_to_frame(node_name : StringName, frame_name : StringName, create_and_commit : bool = true):
 		var prev_frame := editor.get_element_frame(node_name)
 		var prev_frame_name : StringName = prev_frame.name if prev_frame != null else &"";
@@ -756,46 +740,6 @@ class Transactions extends RefCounted:
 			undo_redo.add_undo_method(editor, &"attach_graph_element_to_frame", node_name, prev_frame_name);
 		if frame_name:
 			undo_redo.add_undo_method(editor, &"detach_graph_element_to_frame", node_name);
-		
-		if create_and_commit:
-			end_transaction();
-	
-	func delete_nodes(nodes : Array[StringName], create_and_commit : bool = true):
-		if create_and_commit:
-			begin_transaction("Delete graph nodes", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		
-		# First, remove connections
-		var connection_list : Array[Dictionary] = editor.get_connection_list().duplicate();
-		for node_name in nodes:
-			for i in range(connection_list.size()-1, -1, -1):
-				var connection := connection_list[i];
-				var from_node := connection["from_node"] as StringName;
-				var to_node := connection["to_node"] as StringName;
-				if from_node == node_name || to_node == node_name:
-					var from_port := connection["from_port"] as int;
-					var to_port := connection["to_port"] as int;
-					disconnect_node(from_node, from_port, to_node, to_port, false);
-					
-					connection_list.remove_at(i);
-		
-		# Then, remove frame attachments
-		for node_name in nodes:
-			# If inside a frame, remove that attachment
-			attach_to_frame(node_name, &"", false);
-			
-			var node := editor.get_node(NodePath(node_name));
-			if node is GraphFrame:
-				# If *a* frame, remove attachments with other nodes
-				var attached_nodes := editor.get_attached_nodes_of_frame(node_name);
-				for attached_node in attached_nodes:
-					attach_to_frame(attached_node, &"", false);
-		
-		# Lastly, remove nodes from graph
-		for node_name in nodes:
-			var node := editor.get_node(NodePath(node_name));
-			if !node:
-				continue;
-			remove_child(node, true, false);
 		
 		if create_and_commit:
 			end_transaction();
@@ -840,7 +784,6 @@ class InterfaceSignals extends RefCounted:
 		editor.begin_node_move.connect(_on_begin_node_move);
 		editor.end_node_move.connect(_on_end_node_move);
 		editor.child_exiting_tree.connect(_on_node_removed);
-		editor.delete_nodes_request.connect(_on_delete_nodes_request);
 		editor.visibility_changed.connect(_on_visibility_changed);
 	
 	func _on_popup_request(at_position : Vector2) -> void:
@@ -890,16 +833,6 @@ class InterfaceSignals extends RefCounted:
 				
 	func _on_node_removed(node : Node) -> void:
 		_deselect_node(node);
-		
-	func _on_delete_nodes_request(nodes : Array[StringName]) -> void:
-		nodes = nodes.filter(
-			func (n : StringName) -> bool:
-				for hook in editor.hooks.filter_delete:
-					if !hook.can_delete(n):
-						return false;
-				return true;
-		);
-		editor.transactions.delete_nodes(nodes);
 		
 	func _on_visibility_changed() -> void:
 		if editor._pending_rearrange_after_load:
