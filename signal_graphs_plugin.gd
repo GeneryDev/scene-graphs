@@ -132,3 +132,4 @@ class Settings extends RefCounted:
 				plugin.reload();
 			PROJECT_SETTING_HOOK_SCRIPTS:
 				hook_scripts_changed.emit(value);
+				plugin.reload();
