@@ -126,7 +126,6 @@ func save_to_scene(scene_root : Node) -> void:
 		var represented_object : Object = child.get_object();
 		if !represented_object:
 			continue;
-		var save_data = child.get_save_data();
 
 ### CAPABILITY: drag_and_drop
 func can_drop_data(at_position: Vector2, data: Variant) -> bool:
@@ -144,7 +143,6 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 		var node := editor.get_node_or_null(node_path);
 		if !node: continue;
 		
-		var instance_id := node.get_instance_id();
 		var existing_graph_node : GraphNode = get_graph_node_for_node(node);
 		
 		if existing_graph_node:
@@ -205,7 +203,6 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	var to_object : Object = to_graph_node.get_object();
 	var callable := Callable(to_object, to_graph_node.get_method_port_name(to_port));
 	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
-	var undo_redo := EditorInterface.get_editor_undo_redo();
 	editor.transactions.connect_signal(from_object, signal_name, callable, CONNECT_PERSIST, false);
 	
 	editor.transactions.connect_node(from_node_name, from_port, to_node_name, to_port, false);
@@ -223,7 +220,6 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	var to_object : Object = to_graph_node.get_object();
 	var callable := Callable(to_object, to_graph_node.get_method_port_name(to_port));
 	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
-	var undo_redo := EditorInterface.get_editor_undo_redo();
 	editor.transactions.disconnect_signal(from_object, signal_name, callable, false);
 	
 	editor.transactions.disconnect_node(from_node_name, from_port, to_node_name, to_port, false);
@@ -363,13 +359,11 @@ func select_connections(connections : Array) -> void:
 func get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
 	var cached_connection := _find_connection_from_line_ends(from_position, to_position);
 	if cached_connection:
-		var mid_point := (from_position + to_position) / 2;
 		if cached_connection.graph_element.get_current_mid_point_offset() != Vector2.ZERO:
 			return get_adjusted_connection_line(from_position, to_position, cached_connection.graph_element);
 	return [];
 
 func get_adjusted_connection_line(from_position: Vector2, to_position: Vector2, connection_graph_element : GraphElement) -> PackedVector2Array:
-	var curvature := editor.connection_lines_curvature;
 	var x_diff : float = (to_position.x - from_position.x);
 	var cp_offset : float = x_diff * 0.3;
 	if x_diff < 0:
@@ -411,7 +405,6 @@ func _find_connection_from_line_ends(from_position: Vector2, to_position: Vector
 
 func _on_begin_node_move() -> void:
 	for cached_connection : Dictionary in _connections_with_elements:
-		var connection = cached_connection.connection;
 		if !is_instance_valid(cached_connection.graph_element): continue;
 		if cached_connection.graph_element.selected:
 			cached_connection.graph_element.dragging_reference_mid_point = cached_connection.graph_element.position_offset - cached_connection.graph_element.mid_point_offset;
@@ -424,7 +417,6 @@ func _on_begin_node_move() -> void:
 
 func _on_end_node_move() -> void:
 	for cached_connection : Dictionary in _connections_with_elements:
-		var connection = cached_connection.connection;
 		if !is_instance_valid(cached_connection.graph_element): continue;
 		if cached_connection.graph_element.selected:
 			cached_connection.graph_element.apply_mid_point_offset_change();
@@ -553,7 +545,6 @@ class ViewInterface extends RefCounted:
 	
 	func update_object_view_with_rules(obj : Object, require_connections : bool = false, remove_unused : bool = false) -> bool:
 		if !obj: return false;
-		var any_changes := false;
 		
 		var used_methods := get_used_method_names(obj);
 		var used_signals := get_used_signal_names(obj);
@@ -598,7 +589,6 @@ class ViewInterface extends RefCounted:
 		return any_changes;
 	
 	func get_used_method_names(obj : Object) -> Array:
-		var any_ports := false;
 		var list := [];
 		
 		var connected_method_names := SignalGraphEditor.Utility.get_connected_method_names(obj);
@@ -615,7 +605,6 @@ class ViewInterface extends RefCounted:
 		return list;
 	
 	func get_used_signal_names(obj : Object) -> Array:
-		var any_ports := false;
 		var list := [];
 		for signal_info in obj.get_signal_list():
 			var signal_name := signal_info["name"] as StringName;

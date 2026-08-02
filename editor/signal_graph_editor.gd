@@ -279,7 +279,7 @@ class Hooks extends RefCounted:
 	
 	# First pass: Meta capabilities
 	func _init_hook_meta(instance : Object) -> bool:
-		var script := instance.get_script();
+		var script : Script = instance.get_script();
 		var hook_capabilities : Array[String] = instance.call(METHOD_NAME_GET_CAPABILITIES);
 		
 		for capability in hook_capabilities:
@@ -293,7 +293,7 @@ class Hooks extends RefCounted:
 	
 	# Second pass: Regular capabilities
 	func _init_hook(instance : Object) -> bool:
-		var script := instance.get_script();
+		var script : Script = instance.get_script();
 		var hook_capabilities : Array[String] = instance.call(METHOD_NAME_GET_CAPABILITIES);
 		
 		for capability in hook_capabilities:
@@ -397,7 +397,6 @@ class Selector extends RefCounted:
 	
 	static func _populate_tree(filter : String) -> void:
 		var dialog : ConfirmationDialog = _active["dialog"];
-		var search_bar : LineEdit = _active["search_bar"];
 		var tree : Tree = _active["tree"];
 		var tab_group : ButtonGroup = _active["tab_group"];
 		var method_list : Array[Dictionary] = _active["method_list"];
@@ -693,7 +692,6 @@ class Utility extends RefCounted:
 	
 	static func get_script_icon(script : Script) -> Texture2D:
 		var filepath := script.resource_path;
-		var name := ""
 		var script_classes := ProjectSettings.get_global_class_list() as Array
 		for a_class in script_classes:
 			if a_class.path == filepath:
@@ -944,7 +942,7 @@ class Frames extends RefCounted:
 			return;
 		
 		editor.transactions.begin_transaction("Add frame", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		var common_ancestor : Node;
+		var common_ancestor : Node = null;
 		var common_ancestor_set := false;
 		var common_frame_name : StringName;
 		var common_frame_name_set := false;
@@ -956,7 +954,7 @@ class Frames extends RefCounted:
 				common_frame_name_set = true;
 			else:
 				var common_frame := editor.get_element_frame(node_name);
-				if common_frame_name != common_frame.name if common_frame else &"":
+				if common_frame_name != (common_frame.name if common_frame else &""):
 					common_frame_name = &"";
 			
 			# Attach selected nodes to new frame
