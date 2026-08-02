@@ -641,7 +641,7 @@ class ViewInterface extends RefCounted:
 			list.append(signal_name);
 		
 		return list;
-			
+	
 	func get_graph_node_for_object(obj : Object) -> GraphNode:
 		return editor.get_node_or_null(NodePath(str(obj.get_instance_id()))) as GraphNode;
 	
@@ -692,3 +692,29 @@ class ViewInterface extends RefCounted:
 			undo_redo.add_undo_method(view_interface, &"notify_view_updated");
 			undo_redo.add_undo_method(view_interface, &"select_object", node);
 			editor.transactions.end_transaction();
+		
+		func add_object_view_method(obj : Object, method_name : StringName) -> void:
+			if !view_interface.add_object_view_method(obj, method_name):
+				return;
+			view_interface.notify_view_updated();
+			
+			editor.transactions.begin_transaction("Add node view method", UndoRedo.MERGE_ALL, null, false);
+			var undo_redo := editor.transactions.undo_redo;
+			undo_redo.add_do_method(view_interface, &"add_object_view_method", obj, method_name);
+			undo_redo.add_undo_method(view_interface, &"remove_object_view_method", obj, method_name);
+			undo_redo.add_do_method(view_interface, &"notify_view_updated");
+			undo_redo.add_undo_method(view_interface, &"notify_view_updated");
+			editor.transactions.end_transaction(false);
+		
+		func add_object_view_signal(obj : Object, signal_name : StringName) -> void:
+			if !view_interface.add_object_view_signal(obj, signal_name):
+				return;
+			view_interface.notify_view_updated();
+			
+			editor.transactions.begin_transaction("Add node view signal", UndoRedo.MERGE_ALL, null, false);
+			var undo_redo := editor.transactions.undo_redo;
+			undo_redo.add_do_method(view_interface, &"add_object_view_signal", obj, signal_name);
+			undo_redo.add_undo_method(view_interface, &"remove_object_view_signal", obj, signal_name);
+			undo_redo.add_do_method(view_interface, &"notify_view_updated");
+			undo_redo.add_undo_method(view_interface, &"notify_view_updated");
+			editor.transactions.end_transaction(false);

@@ -228,13 +228,11 @@ func get_method_port_name(port_id : int) -> StringName:
 
 func method_add_requested(method_info : Dictionary) -> void:
 	var method_name := method_info["name"] as StringName;
-	view_interface.add_object_view_method(get_object(), method_name);
-	view_interface.notify_view_updated();
+	view_interface.transactions.add_object_view_method(get_object(), method_name);
 
 func signal_add_requested(signal_info : Dictionary) -> void:
 	var signal_name := signal_info["name"] as StringName;
-	view_interface.add_object_view_signal(get_object(), signal_name);
-	view_interface.notify_view_updated();
+	view_interface.transactions.add_object_view_signal(get_object(), signal_name);
 
 func _on_position_offset_changed() -> void:
 	update_view();
