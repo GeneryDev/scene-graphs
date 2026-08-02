@@ -21,6 +21,14 @@ func save_to_scene() -> void:
 func _enter_tree() -> void:
 	if is_part_of_edited_scene(): return;
 	plugin.scene_changed.connect(_on_scene_changed);
+	_add_hooks_from_project_settings();
+
+func _add_hooks_from_project_settings() -> void:
+	var scripts_list = plugin.settings.hook_scripts;
+	if scripts_list:
+		for script_path in scripts_list:
+			if !script_path: continue;
+			editor.hooks.add_hook(load(script_path));
 
 func _exit_tree() -> void:
 	if is_part_of_edited_scene(): return;

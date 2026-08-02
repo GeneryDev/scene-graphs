@@ -41,13 +41,13 @@ func _init():
 	
 	connections_layer = get_node(^"_connection_layer");
 	hooks = Hooks.new(self);
-	hooks._initialize_hooks();
 
 ### CORE
 
 func _ready() -> void:
 	if is_part_of_edited_scene():
 		return;
+	hooks._initialize_hooks();
 	interface_signals.subscribe();
 	for hook in hooks.configure_port_types:
 		hook.configure_port_types();
@@ -173,17 +173,6 @@ func get_default_connection_line(from_position: Vector2, to_position: Vector2, c
 
 const PROJECT_SETTING_NAME_HOOKS := &"signal_graphs/hooks/hook_scripts";
 
-static func add_project_settings() -> void:
-	if !ProjectSettings.get_setting(PROJECT_SETTING_NAME_HOOKS):
-		ProjectSettings.set_setting(PROJECT_SETTING_NAME_HOOKS, [] as Array[String]);
-	ProjectSettings.add_property_info({
-		"name": PROJECT_SETTING_NAME_HOOKS,
-		"type": TYPE_ARRAY,
-		"hint": PROPERTY_HINT_TYPE_STRING,
-		"hint_string": "{0}/{1}:*.gd,*.cs".format([TYPE_STRING,PROPERTY_HINT_FILE])
-	});
-	ProjectSettings.set_initial_value(PROJECT_SETTING_NAME_HOOKS, [] as Array[String]);
-
 ### HOOKS
 
 class Hooks extends RefCounted:
@@ -243,7 +232,6 @@ class Hooks extends RefCounted:
 		self.editor = editor;
 		
 		_add_builtin_hooks();
-		_add_hooks_from_project_settings();
 	
 	func _initialize_hooks() -> void:
 		# First pass: Meta capabilities
@@ -257,13 +245,6 @@ class Hooks extends RefCounted:
 	func _add_builtin_hooks() -> void:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_signals.gd"));
 		
-	func _add_hooks_from_project_settings() -> void:
-		if !ProjectSettings.get_setting(PROJECT_SETTING_NAME_HOOKS): return;
-		var scripts_list = ProjectSettings.get_setting(PROJECT_SETTING_NAME_HOOKS);
-		for script_path in scripts_list:
-			if !script_path: continue;
-			add_hook(load(script_path));
-	
 	func add_hook(script : Script) -> bool:
 		var instance : Object = script.new(editor);
 		if !instance:
