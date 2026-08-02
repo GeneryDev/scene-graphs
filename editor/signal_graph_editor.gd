@@ -144,10 +144,10 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 		hook.drop_data(at_position, data);
 
 func _get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
-#	for hook in hooks.override_connection_lines:
-#		var override = hook.get_connection_line(from_position, to_position);
-#		if override:
-#			return override;
+	for hook in hooks.override_connection_lines:
+		var override = hook.get_connection_line(from_position, to_position);
+		if override:
+			return override;
 	return get_default_connection_line(from_position, to_position);
 
 func get_default_connection_line(from_position: Vector2, to_position: Vector2, curvature : float = -1) -> PackedVector2Array:
