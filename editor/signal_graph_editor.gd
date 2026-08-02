@@ -211,12 +211,6 @@ class Hooks extends RefCounted:
 			],
 			"hooks": [] as Array[Object]
 		},
-		"filter_delete": {
-			"required_methods": [
-				&"can_delete"
-			],
-			"hooks": [] as Array[Object]
-		},
 		"override_connection_lines": {
 			"required_methods": [
 				&"get_connection_line"

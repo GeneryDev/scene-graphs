@@ -15,6 +15,7 @@ func _init(editor : GraphEdit):
 	
 	view_interface = ViewInterface.new(editor);
 	view_interface.view_updated.connect(_on_view_updated);
+	view_interface.scene_connections_updated.connect(_on_scene_connections_updated);
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
@@ -40,6 +41,9 @@ func populate_from_scene(scene_root : Node) -> void:
 func _on_view_updated() -> void:
 	_populate_graph_nodes_from_view();
 	_populate_graph_node_members_from_view();
+	_populate_node_connections();
+
+func _on_scene_connections_updated() -> void:
 	_populate_node_connections();
 
 func get_graph_node_for_node(node : Node) -> GraphNode:
@@ -102,6 +106,11 @@ func _populate_node_connections() -> void:
 		var graph_node : GraphNode = child;
 		
 		var obj : Object = child.get_object();
+		
+		# Remove all incoming connections -- we'll re-add them after
+		for connection in editor.get_connection_list_from_node(graph_node.name):
+			if connection.to_node == graph_node.name:
+				editor.disconnect_node(connection.from_node, connection.from_port, connection.to_node, connection.to_port);
 		
 		for connection in obj.get_incoming_connections():
 			var sgnal : Signal = connection["signal"];
@@ -201,9 +210,8 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	var callable := Callable(to_object, to_graph_node.get_method_port_name(to_port));
 	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
 	editor.transactions.connect_signal(from_object, signal_name, callable, CONNECT_PERSIST, false);
-	
-	editor.transactions.undo_redo.add_do_method(view_interface, &"notify_view_updated");
-	editor.transactions.undo_redo.add_undo_method(view_interface, &"notify_view_updated");
+	editor.transactions.undo_redo.add_do_method(view_interface, &"notify_scene_connections_updated");
+	editor.transactions.undo_redo.add_undo_method(view_interface, &"notify_scene_connections_updated");
 	editor.transactions.end_transaction();
 
 func _on_disconnection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
@@ -219,9 +227,8 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	var callable := Callable(to_object, to_graph_node.get_method_port_name(to_port));
 	var signal_name : StringName = from_graph_node.get_signal_port_name(from_port);
 	editor.transactions.disconnect_signal(from_object, signal_name, callable, false);
-	
-	editor.transactions.undo_redo.add_do_method(view_interface, &"notify_view_updated");
-	editor.transactions.undo_redo.add_undo_method(view_interface, &"notify_view_updated");
+	editor.transactions.undo_redo.add_do_method(view_interface, &"notify_scene_connections_updated");
+	editor.transactions.undo_redo.add_undo_method(view_interface, &"notify_scene_connections_updated");
 	editor.transactions.end_transaction();
 
 ### DELETING
@@ -423,6 +430,7 @@ func _on_end_node_move() -> void:
 
 class ViewInterface extends RefCounted:
 	signal view_updated();
+	signal scene_connections_updated();
 	
 	var editor : SignalGraphEditor;
 	var transactions : Transactions;
@@ -433,6 +441,9 @@ class ViewInterface extends RefCounted:
 	
 	func notify_view_updated() -> void:
 		view_updated.emit();
+	
+	func notify_scene_connections_updated() -> void:
+		scene_connections_updated.emit();
 	
 	func get_scene_object_views() -> Dictionary:
 		var view := editor.view;
