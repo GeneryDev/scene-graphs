@@ -1,5 +1,5 @@
 ﻿@tool
-extends Control
+extends EditorDock
 
 @export var editor : GraphEdit;
 
