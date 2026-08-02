@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://hc26dyjrynne" path="res://addons/signal-graphs/editor/signal_graph_editor.gd" id="1_bwmb2"]
 [ext_resource type="Script" uid="uid://camepk4lkae85" path="res://addons/signal-graphs/editor/signal_graph_editor_root.gd" id="1_unvls"]
 
-[node name="SignalGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor")]
+[node name="SignalGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor", "view_dropdown")]
 custom_minimum_size = Vector2(200, 200)
 anchors_preset = 15
 anchor_right = 1.0
@@ -17,6 +17,7 @@ default_slot = 8
 available_layouts = 7
 script = ExtResource("1_unvls")
 editor = NodePath("VBoxContainer/GraphEdit")
+view_dropdown = NodePath("VBoxContainer/Header/HFlowContainer/OptionButton")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1108155931]
 layout_mode = 2
@@ -33,9 +34,19 @@ alignment = 2
 layout_mode = 2
 text = "Debug: Print Tree"
 
-[node name="Label" type="Label" parent="VBoxContainer/Header/HFlowContainer" unique_id=1870180315]
+[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/Header/HFlowContainer" unique_id=291913056]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/Header/HFlowContainer" unique_id=1793652831]
+layout_mode = 2
+text = "View:"
+
+[node name="OptionButton" type="OptionButton" parent="VBoxContainer/Header/HFlowContainer" unique_id=1544293729]
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="VSeparator4" type="VSeparator" parent="VBoxContainer/Header/HFlowContainer" unique_id=1540757415]
+layout_mode = 2
 
 [node name="Button3" type="Button" parent="VBoxContainer/Header/HFlowContainer" unique_id=623076724]
 layout_mode = 2

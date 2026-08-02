@@ -1,35 +1,23 @@
 ﻿extends GraphNode
 
-var node_instance_id : int;
+var obj_instance_id : int;
 
 var editor : SignalGraphEditor;
+var view_interface;
 var _method_ports : Dictionary[StringName, int];
 var _signal_ports : Dictionary[StringName, int];
-var _force_shown_methods : Array[StringName];
-var _force_shown_signals : Array[StringName];
 
 var _collapsible_panel : Control;
 
-var _stored_input_connections : Array[StoredConnection];
-var _stored_output_connections : Array[StoredConnection];
-
-# Called when the node enters the scene tree for the first time.
-func _ready() -> void:
-	node_selected.connect(_on_node_selected);
-	node_deselected.connect(_on_node_deselected);
-	pass;
-
-func get_object() -> Node:
-	return instance_from_id(node_instance_id) as Node;
-
-func setup(node : Node, saved_data : Dictionary, editor : SignalGraphEditor) -> bool:
+func _init(obj : Object, editor : SignalGraphEditor, view_interface):
 	self.editor = editor;
+	self.view_interface = view_interface;
 	
-	node_instance_id = node.get_instance_id();
-	name = str(node_instance_id);
-	title = node.name;
+	obj_instance_id = obj.get_instance_id();
+	name = str(obj_instance_id);
+	title = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 	
-	var icon := editor.utility.get_object_icon(node);
+	var icon := editor.utility.get_object_icon(obj);
 	if icon:
 		var icon_rect := TextureRect.new();
 		icon_rect.texture = icon;
@@ -46,34 +34,47 @@ func setup(node : Node, saved_data : Dictionary, editor : SignalGraphEditor) -> 
 	add_button.pressed.connect(_on_add_button_pressed);
 	_collapsible_panel.add_child(add_button);
 	
-	# Add ports and any children
-	var any_ports := create_and_add_contents(node);
+	position_offset_changed.connect(_on_position_offset_changed);
+	node_selected.connect(_on_node_selected);
+	node_deselected.connect(_on_node_deselected);
+
+func get_object() -> Object:
+	return instance_from_id(obj_instance_id) as Object;
+
+func update_from_view() -> void:
+	var obj := get_object();
+	var obj_view = view_interface.get_object_view(obj);
 	
-	# Deserialize saved data
-	if saved_data:
-		position_offset = saved_data["position_offset"] as Vector2;
-	else:
-		position_offset = Vector2.ZERO;
+	rebuild_contents_from_view(obj_view);
 	
-	return any_ports;
+	if obj_view.has("position_offset"):
+		position_offset = obj_view["position_offset"] as Vector2;
 	
-func rebuild_contents() -> bool:
+func update_view() -> void:
+	var obj := get_object();
+	var obj_view = view_interface.get_object_view(obj);
+	if !obj_view: return;
+	
+	obj_view["position_offset"] = position_offset;
+	
+func rebuild_contents_from_view(obj_view : Dictionary) -> bool:
 	clear_all_slots();
 	for child in get_children():
 		remove_child(child)
 		if child != _collapsible_panel:
 			child.queue_free();
 	
-	return create_and_add_contents(get_object());
+	return create_and_add_contents(obj_view);
 
-func create_and_add_contents(node : Node) -> bool:
+func create_and_add_contents(obj_view : Dictionary) -> bool:
+	var obj := get_object();
 	var any_ports := false;
 	if _collapsible_panel != null && self.is_ancestor_of(_collapsible_panel):
 		remove_child(_collapsible_panel);
 	
-	if add_signal_ports(node):
+	if add_signal_ports(obj, obj_view):
 		any_ports = true;
-	if add_method_ports(node):
+	if add_method_ports(obj, obj_view):
 		any_ports = true;
 	
 	_add_collapsible_panel();
@@ -91,15 +92,24 @@ func _add_collapsible_panel() -> void:
 		Color(0xff786bff)
 	);
 
-func add_signal_ports(node : Node) -> bool:
+func get_signal_info_by_name(obj : Object, signal_name : StringName) -> Dictionary:
+	for signal_info in obj.get_signal_list():
+		if signal_info["name"] != signal_name: continue;
+		return signal_info;
+	return {};
+
+func get_method_info_by_name(obj : Object, method_name : StringName) -> Dictionary:
+	for method_info in obj.get_method_list():
+		if method_info["name"] != method_name: continue;
+		return method_info;
+	return {};
+
+func add_signal_ports(obj : Object, obj_view : Dictionary) -> bool:
 	var any_ports := false;
 	_signal_ports.clear();
 	var left_port_index := 0;
-	for signal_info in node.get_signal_list():
-		var signal_name := signal_info["name"] as StringName;
-		
-		if !should_show_signal(signal_name, signal_info, node):
-			continue;
+	for signal_name in obj_view.signals:
+		var signal_info := get_signal_info_by_name(obj, signal_name);
 		
 		var row_control := _create_row("", signal_name, SignalGraphEditor.ICON_NAME_SIGNAL);
 		row_control.tooltip_text = "Signal: " + SignalGraphEditor.Utility.get_method_signature_text(signal_info);
@@ -121,19 +131,15 @@ func add_signal_ports(node : Node) -> bool:
 	
 	return any_ports;
 
-func add_method_ports(node : Node) -> bool:
+func add_method_ports(obj : Object, obj_view : Dictionary) -> bool:
 	var any_ports := false;
 	_method_ports.clear();
 	var right_port_index := 0;
-	var connected_method_names : Array[StringName] = SignalGraphEditor.Utility.get_connected_method_names(node);
 	
-	for method_info in node.get_method_list():
-		var method_name := method_info["name"] as StringName;
+	for method_name in obj_view.methods:
+		var method_info := get_method_info_by_name(obj, method_name);
 		if _method_ports.has(method_name):
 			continue; # skip method overloads
-		
-		if !should_show_method(method_name, method_info, node, connected_method_names):
-			continue;
 		
 		var row_control := _create_row(SignalGraphEditor.ICON_NAME_METHOD, method_name, "");
 		row_control.tooltip_text = "Method: " + SignalGraphEditor.Utility.get_method_signature_text(method_info);
@@ -155,36 +161,6 @@ func add_method_ports(node : Node) -> bool:
 	
 	return any_ports;
 	
-func should_show_method(method_name : String, method_info : Dictionary, node : Node, connected_method_names : Array[StringName]) -> bool:
-	if _force_shown_methods.has(method_name):
-		return true;
-	
-	# Check if method has an incoming connection
-	if connected_method_names == null:
-		connected_method_names = SignalGraphEditor.Utility.get_connected_method_names(node);
-	
-	var port_connected := connected_method_names.has(method_name);
-	
-	if port_connected:
-		return true;
-		
-	# TODO user-defined logic
-		
-	return false;
-	
-func should_show_signal(signal_name : String, signal_info : Dictionary, node : Node) -> bool:
-	if _force_shown_signals.has(signal_name):
-		return true;
-
-	for connection in node.get_signal_connection_list(signal_name):
-		var flags := connection["flags"] as ConnectFlags;
-		if (flags & ConnectFlags.CONNECT_PERSIST) != 0:
-			return true;
-		
-	# TODO user-defined logic
-		
-	return false;
-
 func _on_add_button_pressed() -> void:
 	SignalGraphEditor.Selector.show(get_object(), -1, method_add_requested, signal_add_requested);
 
@@ -221,10 +197,11 @@ func _create_icon_control(icon_name : String, height : int) -> Control:
 		return control;
 
 func _on_node_selected() -> void:
-	_update_collapsible_panel_visibility();
+	_collapsible_panel.visible = selected && get_rect().has_point(editor.get_local_mouse_position());
+	reset_size();
 
 func _update_collapsible_panel_visibility():
-	_collapsible_panel.visible = selected && get_rect().has_point(editor.get_local_mouse_position());
+	_collapsible_panel.visible = selected;
 	reset_size();
 
 func _on_node_deselected() -> void:
@@ -249,126 +226,15 @@ func get_method_port_name(port_id : int) -> StringName:
 			return key;
 	return &"";
 
-func get_save_data() -> Dictionary:
-	var dict := {};
-	dict["position_offset"] = position_offset;
-	return dict;
-
 func method_add_requested(method_info : Dictionary) -> void:
 	var method_name := method_info["name"] as StringName;
-	if !_force_shown_methods.has(method_name):
-		_force_shown_methods.push_back(method_name);
-	
-	_store_connections(true);
-	
-	rebuild_contents();
-	_collapsible_panel.visible = true;
-	
-	_restore_connections();
+	view_interface.add_object_view_method(get_object(), method_name);
+	view_interface.notify_view_updated();
 
 func signal_add_requested(signal_info : Dictionary) -> void:
 	var signal_name := signal_info["name"] as StringName;
-	if !_force_shown_signals.has(signal_name):
-		_force_shown_signals.push_back(signal_name);
-	
-	_store_connections(true);
-	
-	rebuild_contents();
-	_collapsible_panel.visible = true;
-	
-	_restore_connections();
+	view_interface.add_object_view_signal(get_object(), signal_name);
+	view_interface.notify_view_updated();
 
-func _store_connections(disconnect : bool) -> void:
-	_stored_input_connections.clear();
-	_stored_output_connections.clear();
-	
-	for connection in editor.get_connection_list():
-		var from_node := connection["from_node"] as StringName;
-		var to_node := connection["to_node"] as StringName;
-		var from_port := connection["from_port"] as int;
-		var to_port := connection["to_port"] as int;
-		if to_node == name:
-			_stored_input_connections.push_back(StoredConnection.create_from_input(from_node, to_node, from_port, to_port, self));
-		elif from_node == name:
-			_stored_output_connections.push_back(StoredConnection.create_from_output(from_node, to_node, from_port, to_port, self));
-		else:
-			continue;
-		print("Storing connection " + str(connection));
-		print(_stored_input_connections[_stored_input_connections.size()-1]);
-			
-		if disconnect:
-			editor.disconnect_node(from_node, from_port, to_node, to_port);
-
-func _restore_connections():
-	for stored_connection in _stored_input_connections:
-		print("Restoring input connection: " + str(stored_connection));
-		stored_connection.restore_input(self, editor);
-	for stored_connection in _stored_output_connections:
-		print("Restoring output connection: " + str(stored_connection));
-		stored_connection.restore_output(self, editor);
-
-class StoredConnection:
-	### The name of the method/signal that this connection was made with, in this node.
-	var this_port_name : StringName;
-	### The name of the other graph node this connection was made with.
-	var other_node_name : StringName;
-	### The index of the port via which the other graph node was connected.
-	var other_node_port : int;
-	
-	# NOTE: If OtherNodePort is -1, it has a special meaning: this connection represents a connection between this node and itself.
-	# In which case, the OtherNodeName field will instead store the name of the method it was connected to, and ThisPortName will store the signal.
-	
-	func is_self_connection() -> bool:
-		return other_node_port == -1;
-		
-	func _init(this_port_name : StringName, other_node_name : StringName, other_node_port : int):
-		self.this_port_name = this_port_name;
-		self.other_node_name = other_node_name;
-		self.other_node_port = other_node_port;
-	
-	static func create_from_self(from_node : StringName, to_node : StringName, from_port : int, to_port : int, graph_node: GraphNode) -> StoredConnection:
-		var signal_name : StringName = graph_node.get_signal_port_name(from_port);
-		var method_name : StringName = graph_node.get_method_port_name(to_port);
-		return StoredConnection.new(signal_name, method_name, -1);
-	
-	static func create_from_input(from_node : StringName, to_node : StringName, from_port : int, to_port : int, graph_node: GraphNode) -> StoredConnection:
-		if from_node == to_node:
-			# self connection
-			return create_from_self(from_node, to_node, from_port, to_port, graph_node);
-			
-		var method_name : StringName = graph_node.get_method_port_name(to_port);
-	
-		return StoredConnection.new(method_name, from_node, from_port);
-	
-	static func create_from_output(from_node : StringName, to_node : StringName, from_port : int, to_port : int, graph_node: GraphNode) -> StoredConnection:
-		if from_node == to_node:
-			# self connection
-			return create_from_self(from_node, to_node, from_port, to_port, graph_node);
-		
-		var signal_name : StringName = graph_node.get_signal_port_name(from_port);
-	
-		return StoredConnection.new(signal_name, to_node, to_port);
-	
-	func restore_self(graph_node : GraphNode, editor : SignalGraphEditor) -> void:
-		var from_port : int = graph_node.get_signal_port_id(this_port_name);
-		var to_port : int = graph_node.get_method_port_id(other_node_name);
-		editor.connect_node(graph_node.name, from_port, graph_node.name, to_port);
-		
-	func restore_input(graph_node : GraphNode, editor : SignalGraphEditor) -> void:
-		if is_self_connection():
-			restore_self(graph_node, editor);
-			return;
-		
-		var to_port : int = graph_node.get_method_port_id(this_port_name);
-		editor.connect_node(other_node_name, other_node_port, graph_node.name, to_port);
-	
-	func restore_output(graph_node : GraphNode, editor : SignalGraphEditor) -> void:
-		if is_self_connection():
-			restore_self(graph_node, editor);
-			return;
-			
-		var from_port : int = graph_node.get_signal_port_id(this_port_name);
-		editor.connect_node(graph_node.name, from_port, other_node_name, other_node_port);
-	
-	func _to_string() -> String:
-		return "this_port_name: " + str(this_port_name) + ", other_node_name: " + str(other_node_name) + ", other_node_port: " + str(other_node_port);
+func _on_position_offset_changed() -> void:
+	update_view();

@@ -4,13 +4,17 @@ extends RefCounted
 static var ObjectSignalsNode : Script = preload("res://addons/signal-graphs/editor/elements/object_signals_graph_node.gd");
 static var ObjectSignalConnectionElement : Script = preload("res://addons/signal-graphs/editor/elements/object_signal_connection_graph_element.gd");
 static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-graphs/editor/hooks/signal_connection_property_edit.gd");
-const META_NAME_GRAPH_DATA := "_signal_graph_data";
 
 var editor : SignalGraphEditor;
 var _connections_with_elements : Array[Dictionary] = [];
 
+var view_interface : ViewInterface;
+
 func _init(editor : GraphEdit):
 	self.editor = editor;
+	
+	view_interface = ViewInterface.new(editor);
+	view_interface.view_updated.connect(_on_view_updated);
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
@@ -27,39 +31,60 @@ func configure_port_types() -> void:
 ### CAPABILITY: populate
 
 func populate_from_scene(scene_root : Node) -> void:
-	editor.scene_root = scene_root;
-	editor._use_context_position = false;
-	_add_graph_node_for_node(scene_root, true, true)
+	view_interface.clear_view();
+	view_interface.update_node_views_with_rules(scene_root, true, false);
+	view_interface.update_all_object_view_members_with_rules();
+	
+	view_interface.notify_view_updated();
+	
+func _on_view_updated() -> void:
+	_populate_graph_nodes_from_view();
+	_populate_graph_node_members_from_view();
 	_populate_node_connections();
 
 func get_graph_node_for_node(node : Node) -> GraphNode:
 	return editor.get_node_or_null(NodePath(str(node.get_instance_id()))) as GraphNode;
 	
-func _create_graph_node_for_node(node : Node, require_connections : bool = false) -> GraphNode:
-	var graph_node : GraphNode = null;
-	
-	if node.owner == editor.scene_root || node == editor.scene_root:
-		graph_node = ObjectSignalsNode.new() as GraphNode;
-		var saved_data : Dictionary = node.get_meta(META_NAME_GRAPH_DATA) if node.has_meta(META_NAME_GRAPH_DATA) else {};
-		var any_connections : bool = graph_node.setup(node, saved_data, editor);
-		if require_connections && !any_connections:
-			graph_node.queue_free();
-			graph_node = null;
+func _populate_graph_nodes_from_view() -> void:
+	var scene_object_views := view_interface.get_scene_object_views();
+	for instance_id in scene_object_views:
+		if !is_instance_id_valid(instance_id): continue;
+		var obj : Object = instance_from_id(instance_id);
+		
+		var existing := editor.get_node_or_null(NodePath(str(instance_id)));
+		var graph_node : GraphNode;
+		if existing:
+			graph_node = existing;
+			_disconnect_all_for_node(existing.name);
 		else:
-			editor.position_new_element(graph_node);
+			graph_node = _create_graph_node_for_object_from_view(obj);
+			if graph_node:
+				editor.add_child(graph_node);
+	
+func _populate_graph_node_members_from_view() -> void:
+	var scene_object_views := view_interface.get_scene_object_views();
+	for instance_id in scene_object_views:
+		if !is_instance_id_valid(instance_id): continue;
+		var obj : Object = instance_from_id(instance_id);
+		
+		_update_graph_node_for_object_from_view(obj);
+	
+func _create_graph_node_for_object_from_view(obj : Object) -> GraphNode:
+	var obj_view := view_interface.get_object_view(obj);
+	if !obj_view: return null;
+	var graph_node : GraphNode = ObjectSignalsNode.new(obj, editor, view_interface);
 	
 	return graph_node;
 	
-func _add_graph_node_for_node(node : Node, recursive : bool = false, require_connections : bool = false) -> GraphNode:
-	var graph_node := _create_graph_node_for_node(node, require_connections);
-	if graph_node:
-		editor.add_child(graph_node);
+func _update_graph_node_for_object_from_view(obj : Object) -> void:
+	var graph_node := editor.get_node_or_null(NodePath(str(obj.get_instance_id())));
+	if !graph_node: return;
 	
-	if recursive:
-		for child in node.get_children():
-			_add_graph_node_for_node(child, true, require_connections);
-	
-	return graph_node;
+	graph_node.update_from_view();
+
+func _disconnect_all_for_node(name : StringName) -> void:
+	for connection in editor.get_connection_list_from_node(name):
+		editor.disconnect_node(connection.from_node, connection.from_port, connection.to_node, connection.to_port);
 
 func _populate_node_connections() -> void:
 	for child : Node in editor.get_children():
@@ -68,14 +93,9 @@ func _populate_node_connections() -> void:
 		
 		var graph_node : GraphNode = child;
 		
-		if !child.has_method(&"get_object"):
-			continue;
+		var obj : Object = child.get_object();
 		
-		var node : Node = child.call(&"get_object");
-		if !node:
-			continue;
-		
-		for connection in node.get_incoming_connections():
+		for connection in obj.get_incoming_connections():
 			var sgnal : Signal = connection["signal"];
 			var callable : Callable = connection["callable"];
 			
@@ -107,7 +127,6 @@ func save_to_scene(scene_root : Node) -> void:
 		if !represented_object:
 			continue;
 		var save_data = child.get_save_data();
-		represented_object.set_meta(META_NAME_GRAPH_DATA, save_data);
 
 ### CAPABILITY: drag_and_drop
 func can_drop_data(at_position: Vector2, data: Variant) -> bool:
@@ -119,9 +138,6 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 	var data_dict : Dictionary = data;
 	if data_dict["type"] != "nodes": return;
 
-	editor._context_position = at_position;
-	editor._use_context_position = true;
-	
 	editor.set_selected(null);
 	
 	for node_path : NodePath in data_dict["nodes"]:
@@ -134,9 +150,13 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 		if existing_graph_node:
 			existing_graph_node.set_selected(true);
 		else:
-			var graph_node := _create_graph_node_for_node(node, false);
+			view_interface.add_object_view(node);
+			var obj_view := view_interface.get_object_view(node);
+			obj_view["position_offset"] = editor.utility.local_to_graph_position(at_position);
+			view_interface.update_object_view_members_with_rules(node);
+			view_interface.notify_view_updated();
+			var graph_node := get_graph_node_for_node(node)
 			graph_node.set_selected(true);
-			editor.transactions.add_child(graph_node, true, true);
 
 ### INTERFACE SIGNALS
 
@@ -408,3 +428,207 @@ func _on_end_node_move() -> void:
 		if !is_instance_valid(cached_connection.graph_element): continue;
 		if cached_connection.graph_element.selected:
 			cached_connection.graph_element.apply_mid_point_offset_change();
+
+class ViewInterface extends RefCounted:
+	signal view_updated();
+	
+	var editor : SignalGraphEditor;
+	
+	func _init(editor : GraphEdit):
+		self.editor = editor;
+	
+	func notify_view_updated() -> void:
+		view_updated.emit();
+	
+	func get_scene_object_views() -> Dictionary:
+		var view := editor.view;
+		if !view.has("scene_objects"):
+			view["scene_objects"] = {};
+		var scene_object_views : Dictionary = view["scene_objects"];
+		return scene_object_views;
+		
+	func add_object_view(obj : Object) -> bool:
+		if !obj: return false;
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
+		if scene_object_views.has(instance_id):
+			# already added
+			return false;
+		var obj_view := {
+			"methods": [],
+			"signals": [],
+		};
+		scene_object_views[instance_id] = obj_view;
+		return true;
+		
+	func get_object_view(obj : Object) -> Dictionary:
+		if !obj: return {};
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
+		if !scene_object_views.has(instance_id): return {};
+		return scene_object_views[instance_id];
+		
+	func has_object_view(obj : Object) -> bool:
+		if get_object_view(obj):
+			return true;
+		return false;
+		
+	func remove_object_view(obj : Object) -> bool:
+		if !obj: return false;
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
+		if !scene_object_views.has(instance_id): return false;
+		var removed = scene_object_views[instance_id];
+		scene_object_views.erase(instance_id);
+		return true;
+	
+	func add_object_view_method(obj : Object, method_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			printerr("Failed to add object view method; no object view for " + str(obj));
+			return false;
+		var list : Array = obj_view.methods;
+		if list.has(method_name): return false;
+		list.append(method_name);
+		return true;
+		
+	func has_object_view_method(obj : Object, method_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			return false;
+		var list : Array = obj_view.methods;
+		return list.has(method_name);
+	
+	func remove_object_view_method(obj : Object, method_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			printerr("Failed to remove object view method; no object view for " + str(obj));
+			return false;
+		var list : Array = obj_view.methods;
+		if !list.has(method_name): return false;
+		list.remove_at(list.find(method_name));
+		return true;
+	
+	func add_object_view_signal(obj : Object, signal_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			printerr("Failed to add object view signal; no object view for " + str(obj));
+			return false;
+		var list : Array = obj_view.signals;
+		if list.has(signal_name): return false;
+		list.append(signal_name);
+		return true;
+		
+	func has_object_view_signal(obj : Object, signal_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			return false;
+		var list : Array = obj_view.signals;
+		return list.has(signal_name);
+	
+	func remove_object_view_signal(obj : Object, signal_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			printerr("Failed to remove object view signal; no object view for " + str(obj));
+			return false;
+		var list : Array = obj_view.signals;
+		if !list.has(signal_name): return false;
+		list.remove_at(list.find(signal_name));
+		return true;
+	
+	func clear_view() -> void:
+		var view := editor.view;
+		view["scene_objects"] = {};
+	
+	func update_node_views_with_rules(node : Node, require_connections : bool = false, remove_unused : bool = false) -> bool:
+		if !(node == editor.scene_root || node.owner == editor.scene_root): return false;
+		
+		var any_changes := update_object_view_with_rules(node, require_connections, remove_unused);
+		
+		for child in node.get_children():
+			if update_node_views_with_rules(child, require_connections, remove_unused):
+				any_changes = true;
+		
+		return any_changes;
+	
+	func update_object_view_with_rules(obj : Object, require_connections : bool = false, remove_unused : bool = false) -> bool:
+		if !obj: return false;
+		var any_changes := false;
+		
+		var used_methods := get_used_method_names(obj);
+		var used_signals := get_used_signal_names(obj);
+		
+		if !(require_connections && !used_methods && !used_signals):
+			return add_object_view(obj);
+		elif remove_unused:
+			return remove_object_view(obj);
+		else:
+			return false;
+	
+	func update_all_object_view_members_with_rules() -> bool:
+		var object_views : Dictionary = get_scene_object_views();
+		var any_changes := false;
+		for instance_id in object_views:
+			if !is_instance_id_valid(instance_id): continue;
+			var obj : Object = instance_from_id(instance_id);
+			
+			var used_methods := get_used_method_names(obj);
+			var used_signals := get_used_signal_names(obj);
+			
+			for method_name in used_methods:
+				add_object_view_method(obj, method_name);
+			for signal_name in used_signals:
+				add_object_view_signal(obj, signal_name);
+			
+		
+		return any_changes;
+	
+	func update_object_view_members_with_rules(obj : Object) -> bool:
+		var any_changes := false;
+		
+		var used_methods := get_used_method_names(obj);
+		var used_signals := get_used_signal_names(obj);
+		
+		for method_name in used_methods:
+			if add_object_view_method(obj, method_name):
+				any_changes = true;
+		for signal_name in used_signals:
+			if add_object_view_signal(obj, signal_name):
+				any_changes = true;
+		return any_changes;
+	
+	func get_used_method_names(obj : Object) -> Array:
+		var any_ports := false;
+		var list := [];
+		
+		var connected_method_names := SignalGraphEditor.Utility.get_connected_method_names(obj);
+		
+		for method_info in obj.get_method_list():
+			var method_name := method_info["name"] as StringName;
+			if list.has(method_name): continue;
+			var used := connected_method_names.has(method_name);
+			
+			if !used: continue;
+			
+			list.append(method_name);
+		
+		return list;
+	
+	func get_used_signal_names(obj : Object) -> Array:
+		var any_ports := false;
+		var list := [];
+		for signal_info in obj.get_signal_list():
+			var signal_name := signal_info["name"] as StringName;
+			var used := false;
+			
+			for connection in obj.get_signal_connection_list(signal_name):
+				var flags := connection["flags"] as ConnectFlags;
+				if (flags & ConnectFlags.CONNECT_PERSIST) != 0:
+					used = true;
+					break;
+			
+			if !used: continue;
+			
+			list.append(signal_name);
+		
+		return list;

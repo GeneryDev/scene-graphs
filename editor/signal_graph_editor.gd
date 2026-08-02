@@ -19,10 +19,10 @@ var _context_position : Vector2;
 var interface_signals : InterfaceSignals;
 var transactions : Transactions;
 var utility : Utility;
+var views : Views;
 var frames : Frames;
 var hooks : Hooks;
 
-var overlay : Control;
 var connections_layer : Control;
 
 var _port_types_by_name : Dictionary[StringName, int] = {
@@ -31,10 +31,15 @@ var _port_types_by_name : Dictionary[StringName, int] = {
 var _next_port_type_idx := 0;
 var _pending_rearrange_after_load := false;
 
+var view : Dictionary:
+	get:
+		return views.view;
+
 func _init():
 	interface_signals = InterfaceSignals.new(self);
 	transactions = Transactions.new(self);
 	utility = Utility.new(self);
+	views = Views.new(self);
 	frames = Frames.new(self);
 	
 	connections_layer = get_node(^"_connection_layer");
@@ -63,7 +68,7 @@ func clear():
 	notify_selection_changed();
 
 func load(scene_root : Node) -> void:
-	scene_root = scene_root;
+	self.scene_root = scene_root;
 	_use_context_position = false;
 	for hook in hooks.populate:
 		hook.populate_from_scene(scene_root);
@@ -631,8 +636,6 @@ class Selector extends RefCounted:
 
 ### UTILITY
 class Utility extends RefCounted:
-	const VARIANT_TYPE_NAMES : Array = ["Nil","bool","int","float","String","Vector2","Vector2i","Rect2","Rect2i","Vector3","Vector3i","Transform2D","Vector4","Vector4i","Plane","Quaternion","AABB","Basis","Transform3D","Projection","Color","StringName","NodePath","RID","Object","Callable","Signal","Dictionary","Array","PackedByteArray","PackedInt32Array","PackedInt64Array","PackedFloat32Array","PackedFloat64Array","PackedStringArray","PackedVector2Array","PackedVector3Array","PackedColorArray","PackedVector4Array"];
-
 	var editor : SignalGraphEditor;
 	
 	func _init(editor : GraphEdit):
@@ -670,7 +673,7 @@ class Utility extends RefCounted:
 			elif type == TYPE_NIL:
 				s += "Variant";
 			else:
-				s += str(VARIANT_TYPE_NAMES[type]);
+				s += type_string(type);
 			
 			if defaults:
 				var arg_index := i - (args.size() - defaults.size());
@@ -992,3 +995,13 @@ class Frames extends RefCounted:
 			editor.transactions.attach_to_frame(frame.name, common_frame_name, false);
 			
 		editor.transactions.end_transaction();
+
+class Views extends RefCounted:
+
+	var editor : SignalGraphEditor;
+	
+	var view : Dictionary = {};
+	
+	func _init(editor : GraphEdit):
+		self.editor = editor;
+	
