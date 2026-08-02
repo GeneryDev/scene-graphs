@@ -13,9 +13,6 @@ var scene_root : Node;
 var selected_nodes : Array[StringName] = [];
 var dragging : bool = false;
 
-var _use_context_position : bool;
-var _context_position : Vector2;
-
 var interface_signals : InterfaceSignals;
 var transactions : Transactions;
 var utility : Utility;
@@ -69,7 +66,6 @@ func clear():
 
 func load(scene_root : Node) -> void:
 	self.scene_root = scene_root;
-	_use_context_position = false;
 	for hook in hooks.populate:
 		hook.populate_from_scene(scene_root);
 	
@@ -87,12 +83,6 @@ func save(scene_root : Node):
 	
 	for hook in hooks.save:
 		hook.save_to_scene(scene_root);
-
-func position_new_element(element : GraphElement):
-	if _use_context_position:
-		element.position_offset = utility.local_to_graph_position(_context_position);
-	else:
-		element.position_offset = Vector2.ZERO;
 
 func port_type(name : StringName) -> int:
 	if _port_types_by_name.has(name):
@@ -881,8 +871,6 @@ class InterfaceSignals extends RefCounted:
 		menu.add_item("four");
 		editor.add_child(menu);
 		menu.position = editor.get_screen_position() + at_position;
-		editor._use_context_position = true;
-		editor._context_position = at_position;
 		
 		menu.show();
 		menu.close_requested.connect(menu.queue_free);
@@ -948,7 +936,6 @@ class Frames extends RefCounted:
 	func add_frame(group_selected : bool = true):
 		editor.transactions.begin_transaction("Add frame", UndoRedo.MergeMode.MERGE_ALL, null, true);
 		var frame := GraphFrame.new();
-		editor.position_new_element(frame);
 		frame.title = "New Frame";
 		editor.transactions.add_child(frame, true, true);
 		editor.transactions.end_transaction();
