@@ -1,7 +1,7 @@
 ﻿@tool
 extends EditorDock
 
-@export var editor : GraphEdit;
+@export var editor : SignalGraphEditor;
 @export var view_dropdown : OptionButton;
 
 var plugin : EditorPlugin;

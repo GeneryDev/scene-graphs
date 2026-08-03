@@ -16,7 +16,7 @@ var dragging : bool = false;
 var interface_signals : InterfaceSignals;
 var transactions : Transactions;
 var utility : Utility;
-var views : Views;
+var view : View;
 var frames : Frames;
 var hooks : Hooks;
 
@@ -28,15 +28,11 @@ var _port_types_by_name : Dictionary[StringName, int] = {
 var _next_port_type_idx := 0;
 var _pending_rearrange_after_load := false;
 
-var view : Dictionary:
-	get:
-		return views.view;
-
 func _init():
 	interface_signals = InterfaceSignals.new(self);
 	transactions = Transactions.new(self);
 	utility = Utility.new(self);
-	views = Views.new(self);
+	view = View.new(self);
 	frames = Frames.new(self);
 	
 	connections_layer = get_node(^"_connection_layer");
@@ -66,8 +62,11 @@ func clear():
 
 func load(scene_root : Node) -> void:
 	self.scene_root = scene_root;
-	for hook in hooks.populate:
-		hook.populate_from_scene(scene_root);
+	
+	view.clear_objects();
+	view.update_object_views_with_rules();
+	view.update_all_object_member_views_with_rules();
+	view.notify_view_updated();
 	
 	if is_visible_in_tree():
 		call_deferred(&"rearrange_after_load");
@@ -186,12 +185,6 @@ class Hooks extends RefCounted:
 			"hooks": [] as Array[Object],
 			"is_meta": true
 		},
-		"populate": {
-			"required_methods": [
-				&"populate_from_scene"
-			],
-			"hooks": [] as Array[Object]
-		},
 		"drag_and_drop": {
 			"required_methods": [
 				&"can_drop_data",
@@ -216,13 +209,28 @@ class Hooks extends RefCounted:
 				&"get_connection_line"
 			],
 			"hooks": [] as Array[Object]
+		},
+		
+		"view_rule.object_source": {
+			"required_methods": [
+				&"get_view_rule_id",
+				&"populate_view_objects"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"view_rule.member_source": {
+			"required_methods": [
+				&"get_view_rule_id",
+				&"populate_view_object_members"
+			],
+			"hooks": [] as Array[Object]
 		}
 	};
 	
 	var editor : SignalGraphEditor;
 	var _hooks : Array[Object];
 	
-	func _init(editor : GraphEdit):
+	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 		
 		_add_builtin_hooks();
@@ -238,6 +246,8 @@ class Hooks extends RefCounted:
 		
 	func _add_builtin_hooks() -> void:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_signals.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/rules/nodes_with_connections.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/rules/members_with_connections.gd"));
 		
 	func add_hook(script : Script) -> bool:
 		var instance : Object = script.new(editor);
@@ -602,20 +612,51 @@ class Selector extends RefCounted:
 class Utility extends RefCounted:
 	var editor : SignalGraphEditor;
 	
-	func _init(editor : GraphEdit):
+	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 	
 	func local_to_graph_position(position : Vector2) -> Vector2:
 		return (position + editor.scroll_offset) / editor.zoom;
 	
-	static func get_connected_method_names(obj : Object) -> Array[StringName]:
+	static func get_connected_method_names(obj : Object) -> Array:
+		var list := [];
+		
 		var connected_methods : Array[StringName] = [];
 		for connection in obj.get_incoming_connections():
 			if(connection.flags & CONNECT_PERSIST) == 0: continue;
 			var method_name := connection.callable.get_method() as StringName; 
 			if !connected_methods.has(method_name):
 				connected_methods.push_back(method_name);
-		return connected_methods;
+		
+		# doing two passes because we want the returned list to be in a consistent order (by method definition)
+		# rather than the order of connections :(
+		
+		for method_info in obj.get_method_list():
+			var method_name := method_info["name"] as StringName;
+			if list.has(method_name): continue;
+			var used := connected_methods.has(method_name);
+			
+			if used: list.append(method_name);
+		
+		return list;
+	
+	static func get_connected_signal_names(obj : Object) -> Array:
+		var list := [];
+		for signal_info in obj.get_signal_list():
+			var signal_name := signal_info["name"] as StringName;
+			var used := false;
+			
+			for connection in obj.get_signal_connection_list(signal_name):
+				var flags := connection["flags"] as ConnectFlags;
+				if (flags & ConnectFlags.CONNECT_PERSIST) != 0:
+					used = true;
+					break;
+			
+			if !used: continue;
+			
+			list.append(signal_name);
+		
+		return list;
 	
 	static func get_method_signature_text(info : Dictionary) -> String:
 		var args : Array = info["args"];
@@ -686,7 +727,7 @@ class Transactions extends RefCounted:
 	var editor : SignalGraphEditor;
 	var undo_redo : EditorUndoRedoManager;
 	
-	func _init(editor : GraphEdit):
+	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 		undo_redo = EditorInterface.get_editor_undo_redo();
 	
@@ -768,7 +809,7 @@ class InterfaceSignals extends RefCounted:
 	
 	var _dragging_across_frames := false;
 	
-	func _init(editor : GraphEdit):
+	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 
 	func subscribe() -> void:
@@ -836,7 +877,7 @@ class InterfaceSignals extends RefCounted:
 class Frames extends RefCounted:
 	var editor : SignalGraphEditor;
 	
-	func _init(editor : GraphEdit):
+	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 	
 	func add_frame(group_selected : bool = true):
@@ -889,12 +930,219 @@ class Frames extends RefCounted:
 			
 		editor.transactions.end_transaction();
 
-class Views extends RefCounted:
-
+class View extends RefCounted:
+	signal view_updated();
+	
 	var editor : SignalGraphEditor;
+	var transactions : Transactions;
 	
-	var view : Dictionary = {};
+	var view_data : Dictionary = {
+		"rules": {
+			"object_sources": [
+				{
+					"id": "scene_signals:nodes_with_connections",
+					"params": {}
+				}
+			],
+			"member_sources": [
+				{
+					"id": "scene_signals:members_with_connections",
+					"params": {}
+				}
+			]
+		},
+		"scene_objects": {}
+	};
 	
-	func _init(editor : GraphEdit):
+	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
+		transactions = Transactions.new(editor, self);
 	
+	func notify_view_updated() -> void:
+		view_updated.emit();
+	
+	func get_scene_object_views() -> Dictionary:
+		if !view_data.has("scene_objects"):
+			view_data["scene_objects"] = {};
+		var scene_object_views : Dictionary = view_data["scene_objects"];
+		return scene_object_views;
+		
+	func add_object_view(obj : Object) -> bool:
+		if !obj: return false;
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
+		if scene_object_views.has(instance_id):
+			# already added
+			return false;
+		var obj_view := {
+			"members": {}
+		};
+		scene_object_views[instance_id] = obj_view;
+		return true;
+		
+	func set_object_view(obj : Object, obj_view : Dictionary) -> bool:
+		if !obj: return false;
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
+		scene_object_views[instance_id] = obj_view;
+		return true;
+		
+	func get_object_view(obj : Object) -> Dictionary:
+		if !obj: return {};
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
+		if !scene_object_views.has(instance_id): return {};
+		return scene_object_views[instance_id];
+		
+	func has_object_view(obj : Object) -> bool:
+		if get_object_view(obj):
+			return true;
+		return false;
+		
+	func remove_object_view(obj : Object) -> bool:
+		if !obj: return false;
+		var instance_id := obj.get_instance_id();
+		var scene_object_views := get_scene_object_views();
+		if !scene_object_views.has(instance_id): return false;
+		var removed = scene_object_views[instance_id];
+		scene_object_views.erase(instance_id);
+		return true;
+	
+	func add_object_view_member(obj : Object, member_type : String, member_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			printerr("Failed to add object view member; no object view for " + str(obj));
+			return false;
+		var list : Array = obj_view.members[member_type] if obj_view.members.has(member_type) else [];
+		obj_view.members[member_type] = list;
+		if list.has(member_name): return false;
+		list.append(member_name);
+		return true;
+		
+	func has_object_view_member(obj : Object, member_type : String, member_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			return false;
+		return get_object_view_members(obj, member_type).has(member_name);
+	
+	func get_object_view_members(obj : Object, member_type : String) -> Array:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			printerr("Failed to get object view members; no object view for " + str(obj));
+			return [];
+		var list : Array = obj_view.members[member_type] if obj_view.members.has(member_type) else [];
+		obj_view.members[member_type] = list;
+		return list;
+	
+	func remove_object_view_member(obj : Object, member_type : String, member_name : StringName) -> bool:
+		var obj_view := get_object_view(obj);
+		if !obj_view:
+			printerr("Failed to remove object view member; no object view for " + str(obj));
+			return false;
+		var list : Array = get_object_view_members(obj, member_type);
+		if !list.has(member_name): return false;
+		list.remove_at(list.find(member_name));
+		return true;
+	
+	func clear_objects() -> void:
+		view_data["scene_objects"] = {};
+	
+	func get_graph_node_for_object(obj : Object) -> GraphNode:
+		return editor.get_node_or_null(NodePath(str(obj.get_instance_id()))) as GraphNode;
+	
+	func select_object(obj : Object) -> void:
+		var existing_graph_node : GraphNode = get_graph_node_for_object(obj);
+		if existing_graph_node:
+			existing_graph_node.set_selected(true);
+		
+	func get_view_rule_hook(id : String, type : String) -> Object:
+		for hook in editor.hooks.get(type):
+			if hook.get_view_rule_id() == id:
+				return hook;
+		
+		printerr("Invalid view rule id '" + id + "'");
+		return null;
+	
+	func update_object_views_with_rules() -> void:
+		for rule_entry in view_data.rules["object_sources"]:
+			var id : String = rule_entry.id;
+			var params : Dictionary = rule_entry.get("params");
+			var rule_hook := get_view_rule_hook(id, "view_rule.object_source");
+			if !rule_hook: continue;
+			rule_hook.populate_view_objects(params);
+	
+	func update_object_member_views_with_rules(obj : Object) -> void:
+		for rule_entry in view_data.rules["member_sources"]:
+			var id : String = rule_entry.id;
+			var params : Dictionary = rule_entry.get("params");
+			var rule_hook := get_view_rule_hook(id, "view_rule.member_source");
+			if !rule_hook: continue;
+			rule_hook.populate_view_object_members(obj, params);
+	
+	func update_all_object_member_views_with_rules() -> void:
+		var object_views : Dictionary = get_scene_object_views();
+		
+		for rule_entry in view_data.rules["member_sources"]:
+			var id : String = rule_entry.id;
+			var params : Dictionary = rule_entry.get("params");
+			var rule_hook := get_view_rule_hook(id, "view_rule.member_source");
+			if !rule_hook: continue;
+			for instance_id in object_views:
+				if !is_instance_id_valid(instance_id): continue;
+				var obj : Object = instance_from_id(instance_id);
+				rule_hook.populate_view_object_members(obj, params);
+	
+	class Transactions extends RefCounted:
+		var editor : SignalGraphEditor;
+		var view : View;
+		
+		func _init(editor : SignalGraphEditor, view : View):
+			self.editor = editor;
+			self.view = view;
+			
+		func add_object_view(obj : Object, position_offset : Vector2) -> void:
+			if view.has_object_view(obj):
+				view.select_object(obj);
+			else:
+				view.add_object_view(obj);
+				var obj_view := view.get_object_view(obj);
+				obj_view["position_offset"] = position_offset;
+				view.update_object_member_views_with_rules(obj);
+				view.notify_view_updated();
+				view.select_object(obj);
+				
+				editor.transactions.begin_transaction("Add object view", UndoRedo.MERGE_ALL, null, false);
+				var undo_redo := editor.transactions.undo_redo;
+				undo_redo.add_do_method(view, &"set_object_view", obj, obj_view);
+				undo_redo.add_do_method(view, &"notify_view_updated");
+				undo_redo.add_do_method(view, &"select_object", obj);
+				undo_redo.add_undo_method(view, &"remove_object_view", obj);
+				undo_redo.add_undo_method(view, &"notify_view_updated");
+				editor.transactions.end_transaction(false);
+		
+		func remove_object_view(obj : Object) -> void:
+			if !view.has_object_view(obj):
+				return;
+			var obj_view := view.get_object_view(obj);
+			
+			editor.transactions.begin_transaction("Remove object view", UndoRedo.MERGE_ALL, null, false);
+			var undo_redo := editor.transactions.undo_redo;
+			undo_redo.add_do_method(view, &"remove_object_view", obj);
+			undo_redo.add_do_method(view, &"notify_view_updated");
+			undo_redo.add_undo_method(view, &"set_object_view", obj, obj_view);
+			undo_redo.add_undo_method(view, &"notify_view_updated");
+			undo_redo.add_undo_method(view, &"select_object", obj);
+			editor.transactions.end_transaction();
+		
+		func add_object_view_member(obj : Object, member_type : String, member_name : StringName) -> void:
+			if !view.add_object_view_member(obj, member_type, member_name):
+				return;
+			view.notify_view_updated();
+			
+			editor.transactions.begin_transaction("Add node view member", UndoRedo.MERGE_ALL, null, false);
+			var undo_redo := editor.transactions.undo_redo;
+			undo_redo.add_do_method(view, &"add_object_view_member", obj, member_type, member_name);
+			undo_redo.add_undo_method(view, &"remove_object_view_member", obj, member_type, member_name);
+			undo_redo.add_do_method(view, &"notify_view_updated");
+			undo_redo.add_undo_method(view, &"notify_view_updated");
+			editor.transactions.end_transaction(false);

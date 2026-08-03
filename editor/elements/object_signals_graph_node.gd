@@ -1,9 +1,11 @@
 ﻿extends GraphNode
 
+const MEMBER_TYPE_METHOD := "methods";
+const MEMBER_TYPE_SIGNAL := "signals";
+
 var obj_instance_id : int;
 
 var editor : SignalGraphEditor;
-var view_interface;
 var _method_ports : Dictionary[StringName, int];
 var _signal_ports : Dictionary[StringName, int];
 var _method_slots : Dictionary[StringName, int];
@@ -12,9 +14,8 @@ var _signal_slots : Dictionary[StringName, int];
 var _collapsible_panel : Control;
 var _connections_not_in_view : Array = [];
 
-func _init(obj : Object, editor : SignalGraphEditor, view_interface):
+func _init(obj : Object, editor : SignalGraphEditor):
 	self.editor = editor;
-	self.view_interface = view_interface;
 	
 	obj_instance_id = obj.get_instance_id();
 	name = str(obj_instance_id);
@@ -55,7 +56,6 @@ func _exit_tree() -> void:
 func _update_connection_cache() -> void:
 	_connections_not_in_view.clear();
 	var obj := get_object();
-	var obj_view = view_interface.get_object_view(obj);
 
 	var incoming_connections := obj.get_incoming_connections();
 	var seen_method_names : Array = [];
@@ -64,14 +64,14 @@ func _update_connection_cache() -> void:
 		var method_name := method_info["name"] as StringName;
 		if seen_method_names.has(method_name): continue;
 		seen_method_names.append(method_name);
-		if !obj_view.methods.has(method_name): continue;
+		if !editor.view.has_object_view_member(obj, MEMBER_TYPE_METHOD, method_name): continue;
 		
 		for method_connection in incoming_connections:
 			if(method_connection.flags & CONNECT_PERSIST) == 0: continue;
 			if method_connection.callable.get_method() as StringName != method_name: continue;
 			var sgnal : Signal = method_connection.signal;
 			var source : Object = sgnal.get_object();
-			if !view_interface.has_object_view(source):
+			if !editor.view.has_object_view(source):
 				_connections_not_in_view.append({
 					"port_type": editor.port_type(&"method"),
 					"member_name": method_name,
@@ -80,13 +80,13 @@ func _update_connection_cache() -> void:
 	
 	for signal_info in obj.get_signal_list():
 		var signal_name := signal_info["name"] as StringName;
-		if !obj_view.signals.has(signal_name): continue;
+		if !editor.view.has_object_view_member(obj, MEMBER_TYPE_SIGNAL, signal_name): continue;
 		
 		for signal_connection in obj.get_signal_connection_list(signal_name):
 			if(signal_connection.flags & CONNECT_PERSIST) == 0: continue;
 			var callable : Callable = signal_connection.callable;
 			var target : Object = callable.get_object();
-			if !view_interface.has_object_view(target):
+			if !editor.view.has_object_view(target):
 				_connections_not_in_view.append({
 					"port_type": editor.port_type(&"signal"),
 					"member_name": signal_name,
@@ -95,38 +95,38 @@ func _update_connection_cache() -> void:
 
 func update_from_view() -> void:
 	var obj := get_object();
-	var obj_view = view_interface.get_object_view(obj);
+	var obj_view = editor.view.get_object_view(obj);
 	
-	rebuild_contents_from_view(obj_view);
+	rebuild_contents_from_view();
 	
 	if obj_view.has("position_offset"):
 		position_offset = obj_view["position_offset"] as Vector2;
 	
 func update_view() -> void:
 	var obj := get_object();
-	var obj_view = view_interface.get_object_view(obj);
+	var obj_view = editor.view.get_object_view(obj);
 	if !obj_view: return;
 	
 	obj_view["position_offset"] = position_offset;
 	
-func rebuild_contents_from_view(obj_view : Dictionary) -> bool:
+func rebuild_contents_from_view() -> bool:
 	clear_all_slots();
 	for child in get_children():
 		remove_child(child)
 		if child != _collapsible_panel:
 			child.queue_free();
 	
-	return create_and_add_contents(obj_view);
+	return create_and_add_contents();
 
-func create_and_add_contents(obj_view : Dictionary) -> bool:
+func create_and_add_contents() -> bool:
 	var obj := get_object();
 	var any_ports := false;
 	if _collapsible_panel != null && self.is_ancestor_of(_collapsible_panel):
 		remove_child(_collapsible_panel);
 	
-	if add_signal_ports(obj, obj_view):
+	if add_signal_ports(obj):
 		any_ports = true;
-	if add_method_ports(obj, obj_view):
+	if add_method_ports(obj):
 		any_ports = true;
 	
 	_add_collapsible_panel();
@@ -156,11 +156,11 @@ func get_method_info_by_name(obj : Object, method_name : StringName) -> Dictiona
 		return method_info;
 	return {};
 
-func add_signal_ports(obj : Object, obj_view : Dictionary) -> bool:
+func add_signal_ports(obj : Object) -> bool:
 	var any_ports := false;
 	_signal_ports.clear();
 	var left_port_index := 0;
-	for signal_name in obj_view.signals:
+	for signal_name in editor.view.get_object_view_members(obj, MEMBER_TYPE_SIGNAL):
 		var signal_info := get_signal_info_by_name(obj, signal_name);
 		
 		var row_control := _create_row("", signal_name, SignalGraphEditor.ICON_NAME_SIGNAL);
@@ -185,12 +185,12 @@ func add_signal_ports(obj : Object, obj_view : Dictionary) -> bool:
 	
 	return any_ports;
 
-func add_method_ports(obj : Object, obj_view : Dictionary) -> bool:
+func add_method_ports(obj : Object) -> bool:
 	var any_ports := false;
 	_method_ports.clear();
 	var right_port_index := 0;
 	
-	for method_name in obj_view.methods:
+	for method_name in editor.view.get_object_view_members(obj, MEMBER_TYPE_METHOD):
 		var method_info := get_method_info_by_name(obj, method_name);
 		if _method_ports.has(method_name):
 			continue; # skip method overloads
@@ -296,11 +296,11 @@ func get_method_slot_name(slot_index : int) -> StringName:
 
 func method_add_requested(method_info : Dictionary) -> void:
 	var method_name := method_info["name"] as StringName;
-	view_interface.transactions.add_object_view_method(get_object(), method_name);
+	editor.view.transactions.add_object_view_member(get_object(), MEMBER_TYPE_METHOD, method_name);
 
 func signal_add_requested(signal_info : Dictionary) -> void:
 	var signal_name := signal_info["name"] as StringName;
-	view_interface.transactions.add_object_view_signal(get_object(), signal_name);
+	editor.view.transactions.add_object_view_signal(get_object(), MEMBER_TYPE_SIGNAL, signal_name);
 
 func _on_position_offset_changed() -> void:
 	update_view();
