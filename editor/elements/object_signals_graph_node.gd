@@ -27,6 +27,8 @@ func _init(obj : Object, editor : SignalGraphEditor):
 		icon_rect.texture = icon;
 		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED;
 		get_titlebar_hbox().add_child(icon_rect, INTERNAL_MODE_FRONT);
+		get_titlebar_hbox().move_child(icon_rect, 0);
+		get_titlebar_hbox().add_theme_constant_override("separation", 8);
 	
 	_signal_ports = {};
 	_method_ports = {};
