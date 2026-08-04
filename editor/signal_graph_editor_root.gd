@@ -2,7 +2,6 @@
 extends EditorDock
 
 @export var editor : SignalGraphEditor;
-@export var view_dropdown : OptionButton;
 
 var plugin : EditorPlugin;
 
@@ -37,8 +36,3 @@ func _exit_tree() -> void:
 func _on_scene_changed(scene_root : Node) -> void:
 	editor.clear();
 	editor.load(scene_root);
-	
-func _ready():
-	if is_part_of_edited_scene(): return;
-	view_dropdown.add_item("(default)");
-	view_dropdown.select(0);

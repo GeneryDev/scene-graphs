@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://ronsawixom53"]
+
+[node name="Signal Graph View Dialog" type="AcceptDialog" unique_id=423649529]
+oversampling_override = 1.0
+title = "Edit Signal Graph Views"
+position = Vector2i(0, 36)
+size = Vector2i(720, 400)
+visible = true
+
+[node name="Content" type="VBoxContainer" parent="." unique_id=408346596]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 712.0
+offset_bottom = 351.0
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Content" unique_id=1481837627]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Content/HBoxContainer" unique_id=299572121]
+layout_mode = 2
+text = "View"
+
+[node name="View Dropdown" type="OptionButton" parent="Content/HBoxContainer" unique_id=815000166]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Tree" type="Tree" parent="Content" unique_id=1458745878]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+select_mode = 1

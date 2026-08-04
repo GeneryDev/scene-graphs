@@ -15,7 +15,10 @@ func get_signal_graph_capabilities() -> Array[String]:
 func get_view_rule_id() -> String:
 	return "scene_signals:nodes_with_connections";
 
-func populate_view_objects(params : Dictionary) -> bool:
+func get_view_rule_label(params : Variant) -> String:
+	return "(nodes with connected methods/signals)";
+
+func populate_view_objects(params : Variant) -> bool:
 	return _update_node_views_with_rules(editor.scene_root);
 
 func _update_node_views_with_rules(node : Node) -> bool:

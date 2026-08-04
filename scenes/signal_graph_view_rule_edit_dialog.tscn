@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://ci8s6q08dancq"]
+
+[ext_resource type="Script" uid="uid://dpin1n0x5mxl2" path="res://addons/signal-graphs/editor/signal_graph_view_rule_edit_dialog.gd" id="1_ikqc1"]
+
+[node name="Signal Graph View Rule Edit Dialog" type="ConfirmationDialog" unique_id=1062255079]
+oversampling_override = 1.0
+title = "Edit View Rule"
+position = Vector2i(0, 36)
+size = Vector2i(560, 300)
+visible = true
+script = ExtResource("1_ikqc1")
+
+[node name="Content" type="VBoxContainer" parent="." unique_id=408346596]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 552.0
+offset_bottom = 251.0
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Content" unique_id=1473728999]
+layout_mode = 2
+
+[node name="Type Label" type="Label" parent="Content/HBoxContainer" unique_id=1049080258]
+unique_name_in_owner = true
+layout_mode = 2
+text = "View Rule"
+
+[node name="Rule Dropdown" type="OptionButton" parent="Content/HBoxContainer" unique_id=815000166]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HSeparator" type="HSeparator" parent="Content" unique_id=1878467933]
+layout_mode = 2
+
+[node name="Inspector" type="ScrollContainer" parent="Content" unique_id=2119424602]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Property Editors" type="VBoxContainer" parent="Content/Inspector" unique_id=1493004307]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3

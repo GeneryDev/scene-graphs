@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://cgvpjkgyd8npq"]
+
+[node name="Member Selector" type="ConfirmationDialog" unique_id=528744520]
+oversampling_override = 1.0
+title = "Select Method/Signal"
+position = Vector2i(0, 36)
+size = Vector2i(500, 400)
+visible = true
+ok_button_text = "Add"
+
+[node name="Content" type="VBoxContainer" parent="." unique_id=893771441]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 492.0
+offset_bottom = 351.0
+size_flags_vertical = 3
+
+[node name="Tab Row" type="HBoxContainer" parent="Content" unique_id=21397880]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Search Bar" type="LineEdit" parent="Content" unique_id=1992909233]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Filter"
+
+[node name="Tree" type="Tree" parent="Content" unique_id=361295407]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+hide_root = true

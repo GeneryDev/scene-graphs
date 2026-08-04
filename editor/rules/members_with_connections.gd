@@ -15,7 +15,10 @@ func get_signal_graph_capabilities() -> Array[String]:
 func get_view_rule_id() -> String:
 	return "scene_signals:members_with_connections";
 
-func populate_view_object_members(obj : Object, params : Dictionary) -> bool:
+func get_view_rule_label(params : Variant) -> String:
+	return "(connected methods/signals)";
+
+func populate_view_object_members(obj : Object, params : Variant) -> bool:
 	var any_changes := false;
 	
 	var used_methods := SignalGraphEditor.Utility.get_connected_method_names(obj);

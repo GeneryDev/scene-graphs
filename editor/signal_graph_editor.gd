@@ -216,14 +216,16 @@ class Hooks extends RefCounted:
 		"view_rule.object_source": {
 			"required_methods": [
 				&"get_view_rule_id",
-				&"populate_view_objects"
+				&"populate_view_objects",
+				&"get_view_rule_label"
 			],
 			"hooks": [] as Array[Object]
 		},
 		"view_rule.member_source": {
 			"required_methods": [
 				&"get_view_rule_id",
-				&"populate_view_object_members"
+				&"populate_view_object_members",
+				&"get_view_rule_label"
 			],
 			"hooks": [] as Array[Object]
 		}
@@ -250,6 +252,8 @@ class Hooks extends RefCounted:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_signals.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/rules/nodes_with_connections.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/rules/members_with_connections.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/rules/members_by_name.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/rules/nodes_by_path.gd"));
 		
 	func add_hook(script : Script) -> bool:
 		var instance : Object = script.new(editor);
@@ -505,22 +509,13 @@ class Selector extends RefCounted:
 		
 		var theme := EditorInterface.get_editor_theme();
 		
-		var dialog := ConfirmationDialog.new();
+		var dialog : ConfirmationDialog = load("res://addons/signal-graphs/scenes/signal_graph_member_selector_dialog.tscn").instantiate();
 		output["dialog"] = dialog;
-		dialog.title = "Select Method/Signal";
-		dialog.borderless = false;
-		dialog.size = Vector2i(500, 400);
 		dialog.theme = theme;
-		dialog.transient = true;
-		dialog.exclusive = true;
-		
-		var content := VBoxContainer.new();
-		content.size_flags_vertical = Control.SIZE_EXPAND_FILL;
-		dialog.add_child(content);
 		
 		# Tabs
 		
-		var tab_row := HBoxContainer.new();
+		var tab_row : Container = dialog.get_node("%Tab Row");
 		var tab_group := ButtonGroup.new();
 		output["tab_group"] = tab_group;
 		var methods_button := Button.new();
@@ -542,27 +537,16 @@ class Selector extends RefCounted:
 		
 		tab_row.add_child(methods_button);
 		tab_row.add_child(signals_button);
-		content.add_child(tab_row);
 		
 		# Search Bar
 		
-		var search_bar := LineEdit.new();
+		var search_bar : LineEdit = dialog.get_node("%Search Bar");
 		output["search_bar"] = search_bar;
-		search_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
-		search_bar.placeholder_text = "Filter";
 		search_bar.right_icon = theme.get_icon("Search", "EditorIcons");
-		content.add_child(search_bar);
 		
 		# Tree
-		var tree := Tree.new();
+		var tree : Tree = dialog.get_node("%Tree");
 		output["tree"] = tree;
-		tree.size_flags_vertical = Control.SIZE_EXPAND_FILL;
-		tree.hide_root = true;
-		content.add_child(tree);
-		
-		# Buttons
-		dialog.ok_button_text = "Add";
-		dialog.cancel_button_text = "Cancel";
 		
 		dialog.close_requested.connect(dialog.queue_free);
 		
@@ -939,14 +923,14 @@ class View extends RefCounted:
 	var transactions : Transactions;
 	
 	var view_data : Dictionary = {
-		"rules": {
-			"object_sources": [
+		"view_rules": {
+			"object_source": [
 				{
 					"id": "scene_signals:nodes_with_connections",
 					"params": {}
 				}
 			],
-			"member_sources": [
+			"member_source": [
 				{
 					"id": "scene_signals:members_with_connections",
 					"params": {}
@@ -1057,8 +1041,11 @@ class View extends RefCounted:
 		if existing_graph_node:
 			existing_graph_node.set_selected(true);
 		
+	func get_view_rule_hooks(type : String) -> Array[Object]:
+		return editor.hooks.get("view_rule." + type);
+		
 	func get_view_rule_hook(id : String, type : String) -> Object:
-		for hook in editor.hooks.get(type):
+		for hook in get_view_rule_hooks(type):
 			if hook.get_view_rule_id() == id:
 				return hook;
 		
@@ -1066,28 +1053,28 @@ class View extends RefCounted:
 		return null;
 	
 	func update_object_views_with_rules() -> void:
-		for rule_entry in view_data.rules["object_sources"]:
+		for rule_entry in view_data.view_rules["object_source"]:
 			var id : String = rule_entry.id;
 			var params : Dictionary = rule_entry.get("params");
-			var rule_hook := get_view_rule_hook(id, "view_rule.object_source");
+			var rule_hook := get_view_rule_hook(id, "object_source");
 			if !rule_hook: continue;
 			rule_hook.populate_view_objects(params);
 	
 	func update_object_member_views_with_rules(obj : Object) -> void:
-		for rule_entry in view_data.rules["member_sources"]:
+		for rule_entry in view_data.view_rules["member_source"]:
 			var id : String = rule_entry.id;
 			var params : Dictionary = rule_entry.get("params");
-			var rule_hook := get_view_rule_hook(id, "view_rule.member_source");
+			var rule_hook := get_view_rule_hook(id, "member_source");
 			if !rule_hook: continue;
 			rule_hook.populate_view_object_members(obj, params);
 	
 	func update_all_object_member_views_with_rules() -> void:
 		var object_views : Dictionary = get_scene_object_views();
 		
-		for rule_entry in view_data.rules["member_sources"]:
+		for rule_entry in view_data.view_rules["member_source"]:
 			var id : String = rule_entry.id;
 			var params : Dictionary = rule_entry.get("params");
-			var rule_hook := get_view_rule_hook(id, "view_rule.member_source");
+			var rule_hook := get_view_rule_hook(id, "member_source");
 			if !rule_hook: continue;
 			for instance_id in object_views:
 				if !is_instance_id_valid(instance_id): continue;
