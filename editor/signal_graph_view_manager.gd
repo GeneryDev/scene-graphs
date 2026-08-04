@@ -81,6 +81,12 @@ func set_view_dropdown(dropdown : OptionButton, metadata : Dictionary) -> void:
 				dropdown.select(item_idx);
 			break;
 
+func get_localized_view(view_name : String) -> Dictionary:
+	if local_views.has(view_name):
+		return local_views[view_name];
+	else:
+		return {};
+
 func localize_global_view(view_name : String) -> Dictionary:
 	var global_view_data : Dictionary = global_views[view_name];
 	var existing_local_view_data : Dictionary;
@@ -102,9 +108,8 @@ func globalize_local_view(view_name : String) -> Dictionary:
 func view_name_exists(name : String) -> bool:
 	return global_views.has(name) || local_views.has(name);
 
-func activate_view(metadata : Dictionary, update_editor : bool = true) -> void:
+func activate_view(metadata : Dictionary) -> void:
 	active_local_view_metadata = metadata;
-	print("active view now: " + str(metadata));
 	var view_name : String = metadata.view_name;
 	match metadata.view_type:
 		"global":
@@ -112,8 +117,7 @@ func activate_view(metadata : Dictionary, update_editor : bool = true) -> void:
 		"local":
 			active_local_view = local_views[view_name];
 	
-	if update_editor:
-		editor.load(EditorInterface.get_edited_scene_root(), active_local_view);
+	editor.load(EditorInterface.get_edited_scene_root(), active_local_view);
 	set_view_dropdown(%"View Dropdown", metadata);
 
 func get_view_data(metadata : Dictionary) -> Dictionary:
@@ -198,6 +202,17 @@ func remove_view(metadata : Dictionary) -> void:
 		active_local_view_metadata = get_fallback_local_view_metadata();
 	repopulate_view_dropdown();
 
+func clear_local_view_data(metadata : Dictionary) -> void:
+	var view_name : String = metadata.view_name;
+	var view_type : String = metadata.view_type;
+	
+	match view_type:
+		"local":
+			local_views[view_name].erase("scene_objects");
+		"global":
+			local_views.erase(view_name);
+			globalize_local_view(view_name);
+
 func get_fallback_local_view_metadata() -> Dictionary:
 	for name in global_views:
 		return {
@@ -219,6 +234,9 @@ func sanitize_view_rules(view_data : Dictionary) -> void:
 	view_data.get_or_add("view_rules", {});
 	view_data.view_rules.get_or_add("object_source", []);
 	view_data.view_rules.get_or_add("member_source", []);
+
+func reapply_rules() -> void:
+	activate_view(active_local_view_metadata);
 
 ### EDIT VIEWS DIALOG
 
@@ -264,6 +282,7 @@ class EditViewsDialog extends RefCounted:
 		_active = create_dialog();
 		
 		var dialog : AcceptDialog = _active["dialog"];
+		dialog.confirmed.connect(view_manager.reapply_rules);
 		
 		edit_view(view_manager.active_local_view_metadata);
 	
@@ -280,6 +299,7 @@ class EditViewsDialog extends RefCounted:
 		
 		_populate_tree();
 		_populate_toolbar(editing_view_metadata);
+		_populate_scene_info(editing_view_metadata);
 	
 	func _populate_tree() -> void:
 		var tree : Tree = _active["tree"];
@@ -310,6 +330,15 @@ class EditViewsDialog extends RefCounted:
 		
 		var global_toggle : CheckButton = _active["global_toggle"];
 		global_toggle.set_pressed_no_signal(metadata.view_type == "global");
+	
+	func _populate_scene_info(metadata : Dictionary) -> void:
+		var scene_name_label : Label = _active["scene_name_label"];
+		var theme := EditorInterface.get_editor_theme();
+		scene_name_label.text = "This Scene (" + editor.scene_root.scene_file_path.get_file() + ")";
+		
+		var localized_view_data = view_manager.get_localized_view(metadata.view_name);
+		
+		_active["graph_node_count_label"].text = str(localized_view_data.get("scene_objects").size()) if localized_view_data.has("scene_objects") else "Unknown";
 	
 	func _make_global(global : bool) -> void:
 		var new_metadata : Dictionary = view_manager.change_view_type(editing_view_metadata, "global" if global else "local");
@@ -494,6 +523,17 @@ class EditViewsDialog extends RefCounted:
 		
 		dialog.close_requested.connect(dialog.queue_free);
 		
+		# Scene Name
+		var scene_name_label : Label = dialog.get_node("%Scene Name");
+		output["scene_name_label"] = scene_name_label;
+		var graph_node_count_label : Label = dialog.get_node("%Graph Node Count");
+		output["graph_node_count_label"] = graph_node_count_label;
+		var clear_button : Button = dialog.get_node("%Clear Button");
+		output["clear_button"] = clear_button;
+		clear_button.pressed.connect(_clear_local_view_data, CONNECT_DEFERRED);
+		
+#		scene_name_label.add_theme_font_override("font", theme.get_font(&"bold", &"EditorFonts"));
+		
 		# Styles
 		var rule_header_stylebox := StyleBoxFlat.new();
 		rule_header_stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.25);
@@ -563,6 +603,12 @@ class EditViewsDialog extends RefCounted:
 		view_manager.remove_view(metadata);
 		repopulate_view_dropdown();
 		edit_view(view_manager.active_local_view_metadata);
+	
+	func _clear_local_view_data() -> void:
+		var metadata := editing_view_metadata;
+		view_manager.clear_local_view_data(metadata);
+		view_manager.activate_view(metadata);
+		_active["dialog"].queue_free();
 	
 	func create_new_view_dialog(preset_text : String, show_global_toggle : bool, texts : Dictionary, validation_callback : Callable, finished_callback : Callable) -> ConfirmationDialog:
 		var dialog := ConfirmationDialog.new();
