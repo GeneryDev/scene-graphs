@@ -8,6 +8,7 @@ const ICON_NAME_METHOD := "Slot";
 signal connections_changed();
 signal selection_changed();
 signal selection_changed_with_script(script : Script, selected_nodes : Array[Node]);
+signal connection_line_cache_invalidated();
 
 var scene_root : Node;
 var selected_nodes : Array[StringName] = [];
@@ -122,6 +123,7 @@ func notify_connections_changed() -> void:
 	
 func invalidate_connection_line_cache() -> void:
 	connection_lines_curvature = connection_lines_curvature;
+	connection_line_cache_invalidated.emit();
 
 func connect_node_and_notify(from_node : StringName, from_port : int, to_node : StringName, to_port : int, keep_alive : bool = true) -> Error:
 	var err := connect_node(from_node, from_port, to_node, to_port);
