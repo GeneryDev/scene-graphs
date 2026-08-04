@@ -61,12 +61,18 @@ func clear():
 	selected_nodes.clear();
 	notify_selection_changed();
 
-func load(scene_root : Node) -> void:
+func load(scene_root : Node, view_data : Dictionary = {}) -> void:
 	self.scene_root = scene_root;
 	
-	view.clear_objects();
-	view.update_object_views_with_rules();
-	view.update_all_object_member_views_with_rules();
+	if view_data:
+		view.view_data = view_data;
+		view.update_object_views_with_rules();
+		view.update_all_object_member_views_with_rules();
+	else:
+		view.clear_objects();
+		view.update_object_views_with_rules();
+		view.update_all_object_member_views_with_rules();
+	
 	view.notify_view_updated();
 	
 	if is_visible_in_tree():
@@ -1050,22 +1056,48 @@ class View extends RefCounted:
 		
 		printerr("Invalid view rule id '" + id + "'");
 		return null;
+
+	func rule_params_from_dict(hook : Object, raw_params : Dictionary) -> Variant:
+		if !hook.has_method(&"create_view_rule_params"): return null;
+		var params : Object = hook.create_view_rule_params();
+		
+		for key in raw_params:
+			var raw_value = raw_params[key];
+			var default_value = params.get(key);
+			if default_value == null: continue;
+			if default_value is Array:
+				default_value.assign(raw_value);
+			elif default_value is Dictionary:
+				default_value.assign(raw_value);
+			else:
+				params.set(key, raw_value);
+		return params;
+	
+	func rule_params_to_dict(hook : Object, params : Variant) -> Dictionary:
+		if !params: return {};
+		var raw_params : Dictionary = {};
+		for property in params.get_property_list():
+			if property.name == &"script": continue;
+			var value = params.get(property.name);
+			if value == null: continue;
+			raw_params[property.name] = value;
+		return raw_params;
 	
 	func update_object_views_with_rules() -> void:
 		for rule_entry in view_data.view_rules["object_source"]:
 			var id : String = rule_entry.id;
-			var params : Dictionary = rule_entry.get("params");
+			var raw_params : Dictionary = rule_entry.get("params");
 			var rule_hook := get_view_rule_hook(id, "object_source");
 			if !rule_hook: continue;
-			rule_hook.populate_view_objects(params);
+			rule_hook.populate_view_objects(rule_params_from_dict(rule_hook, raw_params));
 	
 	func update_object_member_views_with_rules(obj : Object) -> void:
 		for rule_entry in view_data.view_rules["member_source"]:
 			var id : String = rule_entry.id;
-			var params : Dictionary = rule_entry.get("params");
+			var raw_params : Dictionary = rule_entry.get("params");
 			var rule_hook := get_view_rule_hook(id, "member_source");
 			if !rule_hook: continue;
-			rule_hook.populate_view_object_members(obj, params);
+			rule_hook.populate_view_object_members(obj, rule_params_from_dict(rule_hook, raw_params));
 	
 	func update_all_object_member_views_with_rules() -> void:
 		var object_views : Dictionary = get_scene_object_views();

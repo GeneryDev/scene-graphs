@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://camepk4lkae85" path="res://addons/signal-graphs/editor/signal_graph_editor_root.gd" id="1_unvls"]
 [ext_resource type="Script" uid="uid://cip3hjy77h2ec" path="res://addons/signal-graphs/editor/signal_graph_view_manager.gd" id="2_8syjn"]
 
-[node name="SignalGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor", "view_dropdown")]
+[node name="SignalGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor")]
 custom_minimum_size = Vector2(200, 200)
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,7 +20,6 @@ default_slot = 8
 available_layouts = 7
 script = ExtResource("1_unvls")
 editor = NodePath("VBoxContainer/GraphEdit")
-view_dropdown = NodePath("VBoxContainer/Header/HFlowContainer/View Dropdown")
 
 [node name="Signal View Manager" type="Node" parent="." unique_id=1097538621 node_paths=PackedStringArray("editor")]
 script = ExtResource("2_8syjn")
@@ -39,7 +38,7 @@ alignment = 2
 
 [node name="Views" type="Button" parent="VBoxContainer/Header/HFlowContainer" unique_id=87163369]
 layout_mode = 2
-text = "Views"
+text = "Manage Views"
 
 [node name="View Dropdown" type="OptionButton" parent="VBoxContainer/Header/HFlowContainer" unique_id=1544293729]
 unique_name_in_owner = true
