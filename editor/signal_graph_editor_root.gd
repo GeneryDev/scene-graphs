@@ -10,16 +10,14 @@ func reload_plugin() -> void:
 	plugin.reload();
 
 func populate_from_scene() -> void:
-	var scene_root := EditorInterface.get_edited_scene_root();
 	editor.clear();
-	editor.pre_load(scene_root);
+	editor.load(view_manager.active_local_view);
 
 func get_scene_state() -> Dictionary:
 	return view_manager.serialize_scene_state();
 
 func load_scene(scene_root : Node, scene_state : Dictionary) -> void:
 	editor.clear();
-	editor.pre_load(scene_root);
 	view_manager.deserialize_scene_state(scene_state);
 
 func get_editor_state() -> Dictionary:

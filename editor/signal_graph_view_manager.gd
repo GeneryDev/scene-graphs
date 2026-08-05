@@ -121,6 +121,7 @@ func _serialize_view(runtime_view_data : Dictionary) -> Dictionary:
 			var runtime_objects_of_type = runtime_objects[object_type];
 			for runtime_key in runtime_objects_of_type:
 				var serialized_key = editor.view.runtime_key_serialize(object_type, runtime_key);
+				if serialized_key == null: continue;
 				serialized_objects_of_type[serialized_key] = runtime_objects_of_type[runtime_key];
 	return serialized;
 
@@ -209,7 +210,7 @@ func activate_view(metadata : Dictionary) -> void:
 			active_local_view = local_views[view_name];
 	active_local_view_metadata = metadata;
 	
-	editor.load(EditorInterface.get_edited_scene_root(), active_local_view);
+	editor.load(active_local_view);
 	set_view_dropdown(%"View Dropdown", metadata);
 
 func get_view_data(metadata : Dictionary) -> Dictionary:

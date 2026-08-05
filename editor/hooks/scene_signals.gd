@@ -36,7 +36,11 @@ func runtime_key_to_view_object(object_type : String, key : Variant) -> Object:
 func runtime_key_serialize(object_type : String, key : Variant) -> Variant:
 	var node := instance_from_id(key as int) as Node;
 	if !node: return null;
-	return editor.scene_root.get_path_to(node);
+	var scene_root := editor.scene_root;
+	if scene_root == node || scene_root.is_ancestor_of(node):
+		return editor.scene_root.get_path_to(node);
+	else:
+		return null;
 
 func runtime_key_deserialize(object_type : String, serialized : Variant) -> Variant:
 	var path := serialized as NodePath;

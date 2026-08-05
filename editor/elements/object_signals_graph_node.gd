@@ -73,6 +73,9 @@ func _update_connection_cache() -> void:
 			if method_connection.callable.get_method() as StringName != method_name: continue;
 			var sgnal : Signal = method_connection.signal;
 			var source : Object = sgnal.get_object();
+			if source is Node && !(editor.scene_root != null && (source == editor.scene_root || editor.scene_root.is_ancestor_of(source))):
+				# connected to orphan node, skip;
+				continue;
 			if !editor.view.has_object_view(OBJECT_TYPE_NODE, source):
 				_connections_not_in_view.append({
 					"port_type": editor.port_type(&"method"),

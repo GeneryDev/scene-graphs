@@ -10,7 +10,8 @@ signal selection_changed();
 signal selection_changed_with_script(script : Script, selected_nodes : Array[Node]);
 signal connection_line_cache_invalidated();
 
-var scene_root : Node;
+var scene_root : Node:
+	get: return EditorInterface.get_edited_scene_root();
 var selected_nodes : Array[StringName] = [];
 var dragging : bool = false;
 
@@ -61,12 +62,7 @@ func clear():
 	selected_nodes.clear();
 	notify_selection_changed();
 
-func pre_load(scene_root : Node) -> void:
-	self.scene_root = scene_root;
-
-func load(scene_root : Node, view_data : Dictionary) -> void:
-	self.scene_root = scene_root;
-	
+func load(view_data : Dictionary) -> void:
 	if view_data:
 		view.view_data = view_data;
 		view.update_object_views_with_rules();
