@@ -45,6 +45,9 @@ var active_local_view : Dictionary;
 
 var edit_views_dialog : EditViewsDialog;
 
+var _pending_local_view_activation : Dictionary = {};
+var _editor_state_fully_loaded := false;
+
 ### MAIN SCREEN
 func _enter_tree() -> void:
 	if is_part_of_edited_scene(): return;
@@ -55,7 +58,87 @@ func _enter_tree() -> void:
 		var metadata = view_dropdown.get_item_metadata(selected_index);
 		activate_view(metadata);
 	);
-	call_deferred(&"activate_view", { "view_type": "global", "view_name": "(default)" });
+
+func _test_save() -> void:
+	print("test save");
+	print(var_to_str(serialize_scene_state()));
+	
+func serialize_scene_state() -> Dictionary:
+	var serialized_scene_state := {
+		"active_view": active_local_view_metadata,
+		"local_views": {}
+	};
+	for view_name in local_views:
+		serialized_scene_state.local_views[view_name] = _serialize_view(local_views[view_name]);
+	return serialized_scene_state;
+
+func deserialize_scene_state(serialized_scene_state : Dictionary) -> void:
+	local_views.clear();
+	if serialized_scene_state.has("local_views"):
+		for view_name in serialized_scene_state.local_views:
+			local_views[view_name] = _deserialize_view(serialized_scene_state.local_views[view_name]);
+	
+	repopulate_view_dropdown();
+	
+	if serialized_scene_state.has("active_view"):
+		activate_view(serialized_scene_state["active_view"]);
+	else:
+		activate_view(get_fallback_local_view_metadata());
+	
+func serialize_editor_state() -> Dictionary:
+	var serialized_editor_state := {
+		"global_views": {}
+	};
+	for view_name in global_views:
+		serialized_editor_state.global_views[view_name] = _serialize_view(global_views[view_name]);
+	return serialized_editor_state;
+
+func deserialize_editor_state(serialized_editor_state : Dictionary) -> void:
+	print("Deserializing editor state: " + str(serialized_editor_state));
+	global_views.clear();
+	if serialized_editor_state.has("global_views"):
+		for view_name in serialized_editor_state.global_views:
+			global_views[view_name] = _deserialize_view(serialized_editor_state.global_views[view_name]);
+	
+	repopulate_view_dropdown();
+	
+	_editor_state_fully_loaded = true;
+	
+	if _pending_local_view_activation:
+		activate_view(_pending_local_view_activation);
+		_pending_local_view_activation = {};
+
+func _serialize_view(runtime_view_data : Dictionary) -> Dictionary:
+	var serialized := runtime_view_data.duplicate(false);
+	if serialized.has("scene_data") && serialized.scene_data.has("objects"):
+		serialized.scene_data = serialized.scene_data.duplicate(false);
+		var serialized_objects : Dictionary = {};
+		serialized.scene_data.objects = serialized_objects;
+		var runtime_objects : Dictionary = runtime_view_data.scene_data.objects;
+		for object_type in runtime_objects:
+			var serialized_objects_of_type := {};
+			serialized_objects[object_type] = serialized_objects_of_type;
+			var runtime_objects_of_type = runtime_objects[object_type];
+			for runtime_key in runtime_objects_of_type:
+				var serialized_key = editor.view.runtime_key_serialize(object_type, runtime_key);
+				serialized_objects_of_type[serialized_key] = runtime_objects_of_type[runtime_key];
+	return serialized;
+
+func _deserialize_view(serialized_view_data : Dictionary) -> Dictionary:
+	var runtime_view_data := serialized_view_data.duplicate(false);
+	if runtime_view_data.has("scene_data") && runtime_view_data.scene_data.has("objects"):
+		runtime_view_data.scene_data = runtime_view_data.scene_data.duplicate(false);
+		var runtime_objects : Dictionary = {};
+		runtime_view_data.scene_data.objects = runtime_objects;
+		var serialized_objects : Dictionary = serialized_view_data.scene_data.objects;
+		for object_type in serialized_objects:
+			var runtime_objects_of_type := {};
+			runtime_objects[object_type] = runtime_objects_of_type;
+			var serialized_objects_of_type = serialized_objects[object_type];
+			for serialized_key in serialized_objects_of_type:
+				var runtime_key = editor.view.runtime_key_deserialize(object_type, serialized_key);
+				runtime_objects_of_type[runtime_key] = serialized_objects_of_type[serialized_key];
+	return runtime_view_data;
 
 func populate_view_dropdown(dropdown : OptionButton) -> void:
 	var theme := EditorInterface.get_editor_theme();
@@ -109,13 +192,22 @@ func view_name_exists(name : String) -> bool:
 	return global_views.has(name) || local_views.has(name);
 
 func activate_view(metadata : Dictionary) -> void:
-	active_local_view_metadata = metadata;
 	var view_name : String = metadata.view_name;
 	match metadata.view_type:
 		"global":
+			if !global_views.has(view_name):
+				if !_editor_state_fully_loaded:
+					_pending_local_view_activation = metadata;
+				else:
+					printerr("Failed to activate " + metadata.view_type + " view '" + view_name + "': No such view exists");
+				return;
 			active_local_view = localize_global_view(view_name);
 		"local":
+			if !local_views.has(view_name):
+				printerr("Failed to activate " + metadata.view_type + " view '" + view_name + "': No such view exists");
+				return;
 			active_local_view = local_views[view_name];
+	active_local_view_metadata = metadata;
 	
 	editor.load(EditorInterface.get_edited_scene_root(), active_local_view);
 	set_view_dropdown(%"View Dropdown", metadata);
@@ -211,7 +303,7 @@ func clear_local_view_data(metadata : Dictionary) -> void:
 			local_views[view_name].erase("scene_data");
 		"global":
 			local_views.erase(view_name);
-			globalize_local_view(view_name);
+			localize_global_view(view_name);
 
 func get_fallback_local_view_metadata() -> Dictionary:
 	for name in global_views:
@@ -225,6 +317,9 @@ func get_fallback_local_view_metadata() -> Dictionary:
 			"view_type": "local"
 		};
 	# uhh... no more views? Add one?
+	return _help_no_views_available();
+
+func _help_no_views_available() -> Dictionary:
 	return create_view({
 		"view_name": "(empty)",
 		"view_type": "local"

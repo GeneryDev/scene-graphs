@@ -61,13 +61,21 @@ func clear():
 	selected_nodes.clear();
 	notify_selection_changed();
 
-func load(scene_root : Node, view_data : Dictionary = {}) -> void:
+func pre_load(scene_root : Node) -> void:
+	self.scene_root = scene_root;
+
+func load(scene_root : Node, view_data : Dictionary) -> void:
 	self.scene_root = scene_root;
 	
 	if view_data:
 		view.view_data = view_data;
 		view.update_object_views_with_rules();
 		view.update_all_object_member_views_with_rules();
+	
+		if view_data.has("scene_data") && view_data.scene_data.has("zoom"):
+			zoom = view_data.scene_data.zoom;
+		if view_data.has("scene_data") && view_data.scene_data.has("scroll_offset"):
+			scroll_offset = view_data.scene_data.scroll_offset;
 	else:
 		view.clear_all_objects();
 		view.update_object_views_with_rules();
@@ -82,13 +90,7 @@ func load(scene_root : Node, view_data : Dictionary = {}) -> void:
 
 func rearrange_after_load():
 	_pending_rearrange_after_load = false;
-	arrange_nodes();
-
-func save(scene_root : Node):
-	scene_root = scene_root;
-	
-	for hook in hooks.save:
-		hook.save_to_scene(scene_root);
+#	arrange_nodes();
 
 func port_type(name : StringName) -> int:
 	if _port_types_by_name.has(name):
@@ -203,12 +205,6 @@ class Hooks extends RefCounted:
 		"configure_port_types": {
 			"required_methods": [
 				&"configure_port_types"
-			],
-			"hooks": [] as Array[Object]
-		},
-		"save": {
-			"required_methods": [
-				&"save_to_scene"
 			],
 			"hooks": [] as Array[Object]
 		},
@@ -821,6 +817,7 @@ class InterfaceSignals extends RefCounted:
 		editor.end_node_move.connect(_on_end_node_move);
 		editor.child_exiting_tree.connect(_on_node_removed);
 		editor.visibility_changed.connect(_on_visibility_changed);
+		editor.scroll_offset_changed.connect(_on_scroll_offset_changed);
 	
 	func _on_popup_request(at_position : Vector2) -> void:
 		var menu := PopupMenu.new();
@@ -873,6 +870,11 @@ class InterfaceSignals extends RefCounted:
 	func _on_visibility_changed() -> void:
 		if editor._pending_rearrange_after_load:
 			editor.call_deferred(&"rearrange_after_load");
+	
+	func _on_scroll_offset_changed(offset : Vector2) -> void:
+		var scene_data : Dictionary = editor.view.view_data.get_or_add("scene_data", {});
+		scene_data.scroll_offset = editor.scroll_offset;
+		scene_data.zoom = editor.zoom;
 
 ### FRAMES
 class Frames extends RefCounted:
@@ -1177,13 +1179,13 @@ class View extends RefCounted:
 			
 			for rule_entry in view_data.view_rules["member_source"]:
 				var id : String = rule_entry.id;
-				var params : Dictionary = rule_entry.get("params");
+				var raw_params : Dictionary = rule_entry.get("params");
 				var rule_hook := get_view_rule_hook(id, "member_source");
 				if !rule_hook: continue;
 				for runtime_key in object_views:
 					var obj : Object = runtime_key_to_view_object(object_type, runtime_key);
 					if !obj: continue;
-					rule_hook.populate_view_object_members(object_type, obj, params);
+					rule_hook.populate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
 	
 	class Transactions extends RefCounted:
 		var editor : SignalGraphEditor;

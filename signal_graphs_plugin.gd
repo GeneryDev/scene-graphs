@@ -14,9 +14,13 @@ var _graph_editor : EditorDock;
 var settings : Settings;
 
 var _is_this_instance_main_screen : Variant;
+var _pending_scene_state : Dictionary;
 
 func _init() -> void:
 	settings = Settings.new(self);
+	scene_changed.connect(_on_scene_changed);
+	scene_closed.connect(_on_scene_closed);
+	scene_saved.connect(_on_scene_saved);
 
 func _enter_tree() -> void:
 	# Initialization of the plugin goes here.
@@ -48,6 +52,30 @@ func remove_editor() -> void:
 func _make_visible(visible: bool) -> void:
 	if _has_main_screen():
 		_graph_editor.visible = visible;
+		
+func _get_state() -> Dictionary:
+	return _graph_editor.get_scene_state();
+
+func _set_state(state: Dictionary) -> void:
+	_pending_scene_state = state;
+
+func _get_window_layout(configuration: ConfigFile) -> void:
+	var editor_state = _graph_editor.get_editor_state();
+	configuration.set_value("Signal Graphs", "editor_state", editor_state);
+
+func _set_window_layout(configuration: ConfigFile) -> void:
+	_graph_editor.set_editor_state(configuration.get_value("Signal Graphs", "editor_state", {}));
+
+func _on_scene_changed(scene_root : Node) -> void:
+	var scene_state := _pending_scene_state;
+	_pending_scene_state = {};
+	_graph_editor.load_scene(scene_root, scene_state);
+
+func _on_scene_closed(filepath : String) -> void:
+	pass;
+
+func _on_scene_saved(filepath : String) -> void:
+	pass;
 
 func reload() -> void:
 	EditorInterface.call_deferred(&"set_plugin_enabled", "signal-graphs", false);

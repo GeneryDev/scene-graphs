@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://camepk4lkae85" path="res://addons/signal-graphs/editor/signal_graph_editor_root.gd" id="1_unvls"]
 [ext_resource type="Script" uid="uid://cip3hjy77h2ec" path="res://addons/signal-graphs/editor/signal_graph_view_manager.gd" id="2_8syjn"]
 
-[node name="SignalGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor")]
+[node name="SignalGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor", "view_manager")]
 custom_minimum_size = Vector2(200, 200)
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,6 +20,7 @@ default_slot = 8
 available_layouts = 7
 script = ExtResource("1_unvls")
 editor = NodePath("VBoxContainer/GraphEdit")
+view_manager = NodePath("Signal View Manager")
 
 [node name="Signal View Manager" type="Node" parent="." unique_id=1097538621 node_paths=PackedStringArray("editor")]
 script = ExtResource("2_8syjn")
@@ -82,6 +83,6 @@ script = ExtResource("1_bwmb2")
 
 [connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Views" to="Signal View Manager" method="show_dialog" flags=3]
 [connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button4" to="VBoxContainer/GraphEdit" method="print_tree_pretty"]
-[connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button3" to="." method="save_to_scene"]
+[connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button3" to="Signal View Manager" method="_test_save"]
 [connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button2" to="." method="populate_from_scene"]
 [connection signal="pressed" from="VBoxContainer/Header/HFlowContainer/Button" to="." method="reload_plugin"]

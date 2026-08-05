@@ -21,7 +21,7 @@ func _init(editor : SignalGraphEditor):
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["drag_and_drop","configure_port_types","save","override_connection_lines","view_object_serialization"];
+	return ["drag_and_drop","configure_port_types","override_connection_lines","view_object_serialization"];
 	
 ### CAPABILITY: view_object_serialization
 func get_supported_view_object_types() -> Array[String]:
@@ -142,15 +142,6 @@ func _populate_node_connections() -> void:
 			
 			editor.connect_node(owner_graph_node.name, from_port, graph_node.name, to_port);
 	editor.notify_connections_changed();
-			
-### CAPABILITY: save
-func save_to_scene(scene_root : Node) -> void:
-	for child : Node in editor.get_children():
-		if !is_instance_of(child, ObjectSignalsNode):
-			continue;
-		var represented_object : Object = child.get_object();
-		if !represented_object:
-			continue;
 
 ### CAPABILITY: drag_and_drop
 func can_drop_data(at_position: Vector2, data: Variant) -> bool:
