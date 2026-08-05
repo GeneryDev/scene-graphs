@@ -5,6 +5,8 @@ static var ObjectSignalsNode : Script = preload("res://addons/signal-graphs/edit
 static var ObjectSignalConnectionElement : Script = preload("res://addons/signal-graphs/editor/elements/object_signal_connection_graph_element.gd");
 static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-graphs/editor/hooks/signal_connection_property_edit.gd");
 
+const OBJECT_TYPE_NODE := "node";
+
 signal scene_connections_updated();
 
 var editor : SignalGraphEditor;
@@ -19,7 +21,29 @@ func _init(editor : SignalGraphEditor):
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["drag_and_drop","configure_port_types","save","override_connection_lines"];
+	return ["drag_and_drop","configure_port_types","save","override_connection_lines","view_object_serialization"];
+	
+### CAPABILITY: view_object_serialization
+func get_supported_view_object_types() -> Array[String]:
+	return [OBJECT_TYPE_NODE];
+
+func view_object_to_runtime_key(object_type : String, obj : Object) -> Variant:
+	return obj.get_instance_id();
+
+func runtime_key_to_view_object(object_type : String, key : Variant) -> Object:
+	return instance_from_id(key as int);
+
+func runtime_key_serialize(object_type : String, key : Variant) -> Variant:
+	var node := instance_from_id(key as int) as Node;
+	if !node: return null;
+	return editor.scene_root.get_path_to(node);
+
+func runtime_key_deserialize(object_type : String, serialized : Variant) -> Variant:
+	var path := serialized as NodePath;
+	if !path: return null;
+	var node := editor.scene_root.get_node_or_null(path);
+	if !node: return null;
+	return node.get_instance_id();
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
@@ -39,51 +63,41 @@ func _on_scene_connections_updated() -> void:
 	
 func notify_scene_connections_updated() -> void:
 	scene_connections_updated.emit();
-
-func get_graph_node_for_node(node : Node) -> GraphNode:
-	return editor.get_node_or_null(NodePath(str(node.get_instance_id()))) as GraphNode;
 	
 func _populate_graph_nodes_from_view() -> void:
-	var scene_object_views := editor.view.get_scene_object_views();
-	for instance_id in scene_object_views:
-		if !is_instance_id_valid(instance_id): continue;
-		var obj : Object = instance_from_id(instance_id);
+	var scene_object_views := editor.view.get_scene_object_views(OBJECT_TYPE_NODE);
+	for runtime_key in scene_object_views:
+		var obj : Object = runtime_key_to_view_object(OBJECT_TYPE_NODE, runtime_key);
+		if !obj: continue;
 		
-		var existing := editor.get_node_or_null(NodePath(str(instance_id)));
+		var existing := editor.view.get_graph_node_for_object(OBJECT_TYPE_NODE, obj);
 		var graph_node : GraphNode;
 		if existing:
 			graph_node = existing;
 			_disconnect_all_for_node(existing.name);
 		else:
-			graph_node = _create_graph_node_for_object_from_view(obj);
+			graph_node = editor.view.instantiate_graph_node_for_object(OBJECT_TYPE_NODE, obj, ObjectSignalsNode);
 			if graph_node:
 				editor.add_child(graph_node);
 	
 	for child : Node in editor.get_children():
 		if !is_instance_of(child, ObjectSignalsNode):
 			continue;
-		var instance_id := int(child.name);
-		if !scene_object_views.has(instance_id):
+		var obj : Object = child.get_object();
+		if !editor.view.has_object_view(OBJECT_TYPE_NODE, obj):
 			editor.remove_child(child);
 			child.queue_free();
 	
 func _populate_graph_node_members_from_view() -> void:
-	var scene_object_views := editor.view.get_scene_object_views();
-	for instance_id in scene_object_views:
-		if !is_instance_id_valid(instance_id): continue;
-		var obj : Object = instance_from_id(instance_id);
+	var scene_object_views := editor.view.get_scene_object_views(OBJECT_TYPE_NODE);
+	for runtime_key in scene_object_views:
+		var obj : Object = runtime_key_to_view_object(OBJECT_TYPE_NODE, runtime_key);
+		if !obj: continue;
 		
 		_update_graph_node_for_object_from_view(obj);
 	
-func _create_graph_node_for_object_from_view(obj : Object) -> GraphNode:
-	var obj_view := editor.view.get_object_view(obj);
-	if !obj_view: return null;
-	var graph_node : GraphNode = ObjectSignalsNode.new(obj, editor);
-	
-	return graph_node;
-	
 func _update_graph_node_for_object_from_view(obj : Object) -> void:
-	var graph_node := editor.get_node_or_null(NodePath(str(obj.get_instance_id())));
+	var graph_node := editor.view.get_graph_node_for_object(OBJECT_TYPE_NODE, obj);
 	if !graph_node: return;
 	
 	graph_node.update_from_view();
@@ -116,7 +130,7 @@ func _populate_node_connections() -> void:
 			if owner is not Node:
 				continue;
 				
-			var owner_graph_node := get_graph_node_for_node(owner);
+			var owner_graph_node := editor.view.get_graph_node_for_object(OBJECT_TYPE_NODE, owner);
 			if !owner_graph_node:
 				continue;
 			
@@ -153,7 +167,7 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 	for node_path : NodePath in data_dict["nodes"]:
 		var node := editor.get_node_or_null(node_path);
 		if !node: continue;
-		editor.view.transactions.add_object_view(node, editor.utility.local_to_graph_position(at_position));
+		editor.view.transactions.add_object_view(OBJECT_TYPE_NODE, node, editor.utility.local_to_graph_position(at_position));
 
 ### INTERFACE SIGNALS
 
@@ -232,7 +246,7 @@ func _on_delete_nodes_request(graph_nodes : Array[StringName]) -> void:
 		var graph_node := editor.get_node_or_null(NodePath(graph_node_name));
 		if !is_instance_of(graph_node, ObjectSignalsNode): continue;
 		var obj : Object = graph_node.get_object();
-		editor.view.transactions.remove_object_view(obj);
+		editor.view.transactions.remove_object_view(OBJECT_TYPE_NODE, obj);
 
 ### CONNECTIONS
 

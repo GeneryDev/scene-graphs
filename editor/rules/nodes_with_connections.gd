@@ -1,7 +1,7 @@
 ﻿@tool
 extends RefCounted
 
-
+const OBJECT_TYPE_NODE := "node";
 
 
 var editor : SignalGraphEditor;
@@ -35,6 +35,7 @@ func populate_view_objects(params : Params) -> bool:
 	return _update_node_views_with_rules(editor.scene_root, params);
 
 func _update_node_views_with_rules(node : Node, params : Params) -> bool:
+	if !node: return false;
 	if !(node == editor.scene_root || node.owner == editor.scene_root): return false;
 	
 	var any_changes := _update_object_view_with_rules(node, params);
@@ -49,9 +50,9 @@ func _update_object_view_with_rules(node : Node, params : Params) -> bool:
 	if !node: return false;
 	
 	if _should_include_node(node, params):
-		return editor.view.add_object_view(node);
+		return editor.view.add_object_view(OBJECT_TYPE_NODE, node);
 	elif false:
-		return editor.view.remove_object_view(node);
+		return editor.view.remove_object_view(OBJECT_TYPE_NODE, node);
 	else:
 		return false;
 

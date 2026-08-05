@@ -208,7 +208,7 @@ func clear_local_view_data(metadata : Dictionary) -> void:
 	
 	match view_type:
 		"local":
-			local_views[view_name].erase("scene_objects");
+			local_views[view_name].erase("scene_data");
 		"global":
 			local_views.erase(view_name);
 			globalize_local_view(view_name);
@@ -333,12 +333,18 @@ class EditViewsDialog extends RefCounted:
 	
 	func _populate_scene_info(metadata : Dictionary) -> void:
 		var scene_name_label : Label = _active["scene_name_label"];
-		var theme := EditorInterface.get_editor_theme();
 		scene_name_label.text = "This Scene (" + editor.scene_root.scene_file_path.get_file() + ")";
 		
 		var localized_view_data = view_manager.get_localized_view(metadata.view_name);
 		
-		_active["graph_node_count_label"].text = str(localized_view_data.get("scene_objects").size()) if localized_view_data.has("scene_objects") else "Unknown";
+		if localized_view_data.has("scene_data") && localized_view_data.scene_data.has("objects"):
+			var total_graph_nodes := 0;
+			for object_type in localized_view_data.scene_data.objects:
+				total_graph_nodes += localized_view_data.scene_data.objects[object_type].size();
+			_active["graph_node_count_label"].text = str(total_graph_nodes);
+		else:
+			_active["graph_node_count_label"].text = "Unknown";
+		
 	
 	func _make_global(global : bool) -> void:
 		var new_metadata : Dictionary = view_manager.change_view_type(editing_view_metadata, "global" if global else "local");
