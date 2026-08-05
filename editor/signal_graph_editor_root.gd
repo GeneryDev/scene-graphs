@@ -16,7 +16,7 @@ func populate_from_scene() -> void:
 func get_scene_state() -> Dictionary:
 	return view_manager.serialize_scene_state();
 
-func load_scene(scene_root : Node, scene_state : Dictionary) -> void:
+func load_scene(scene_state : Dictionary) -> void:
 	editor.clear();
 	view_manager.deserialize_scene_state(scene_state);
 

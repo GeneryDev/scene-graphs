@@ -94,7 +94,6 @@ func serialize_editor_state() -> Dictionary:
 	return serialized_editor_state;
 
 func deserialize_editor_state(serialized_editor_state : Dictionary) -> void:
-	print("Deserializing editor state: " + str(serialized_editor_state));
 	global_views.clear();
 	if serialized_editor_state.has("global_views"):
 		for view_name in serialized_editor_state.global_views:
@@ -193,6 +192,7 @@ func view_name_exists(name : String) -> bool:
 	return global_views.has(name) || local_views.has(name);
 
 func activate_view(metadata : Dictionary) -> void:
+	if !metadata: return;
 	var view_name : String = metadata.view_name;
 	match metadata.view_type:
 		"global":
