@@ -258,9 +258,9 @@ class Hooks extends RefCounted:
 		
 	func _add_builtin_hooks() -> void:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_signals.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/rules/nodes_with_connections.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/rules/members_with_connections.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/rules/members_by_name.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/nodes_with_connections.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_with_connections.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_by_name.gd"));
 		
 	func add_hook(script : Script) -> bool:
 		var instance : Object = script.new(editor);

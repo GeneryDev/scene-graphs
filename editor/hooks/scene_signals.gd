@@ -3,7 +3,7 @@ extends RefCounted
 
 static var ObjectSignalsNode : Script = preload("res://addons/signal-graphs/editor/elements/object_signals_graph_node.gd");
 static var ObjectSignalConnectionElement : Script = preload("res://addons/signal-graphs/editor/elements/object_signal_connection_graph_element.gd");
-static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-graphs/editor/hooks/signal_connection_property_edit.gd");
+static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-graphs/editor/inspector/signal_connection_property_edit.gd");
 
 const OBJECT_TYPE_NODE := "node";
 
