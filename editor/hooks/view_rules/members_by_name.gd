@@ -53,3 +53,11 @@ func create_view_rule_params() -> Object:
 class Params extends RefCounted:
 	@export var methods : Array[StringName];
 	@export var signals : Array[StringName];
+	
+	func get_property_description(property : StringName) -> String:
+		match property:
+			&"methods":
+				return "A list of methods that will automatically get added,\nif they exist on the target object.\nMust match the exact name they were defined with.";
+			&"signals":
+				return "A list of signals that will automatically get added,\nif they exist on the target object.\nMust match the exact name they were defined with.";
+		return "";

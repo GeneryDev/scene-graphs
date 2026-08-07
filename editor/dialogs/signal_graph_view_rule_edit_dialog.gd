@@ -69,6 +69,11 @@ func setup_inspector() -> void:
 				property_editor.property_changed.connect(func (_property: StringName, _value: Variant, _field: StringName, _changing: bool) -> void:
 					property_editor.update_property();
 				);
+			
+			if _editing_params.has_method(&"get_property_description"):
+				var description : String = _editing_params.get_property_description(property.name);
+				if !description.is_empty():
+					property_editor.tooltip_text = description;
 	else:
 		var none_label := Label.new();
 		none_label.text = "No parameters for this rule";

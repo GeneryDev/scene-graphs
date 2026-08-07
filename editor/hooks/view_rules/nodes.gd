@@ -86,7 +86,11 @@ func create_view_rule_params() -> Object:
 
 class Params extends RefCounted:
 	@export var sub_paths : Array[String];
-	@export var require_connections : bool = true;			&"sub_paths":
+	@export var require_shown_members : bool = true;
+	
+	func get_property_description(property : StringName) -> String:
+		match property:
+			&"sub_paths":
 				return "If non-empty, restricts the added nodes to only those\nwhose node path contains at least one of the substrings listed in this array.\nFor example, if sub_paths is [&\"Area\", &\"Zone\"], only nodes with \"Area\" or \"Zone\" in their path\n(either their name, or one of their ancestors' names) will be added.\nThis search is case-insensitive.";
 			&"require_shown_members":
 				return "If checked, this rule will use rules under 'Member Sources'\nto determine whether a node should be added, requiring at least one member.\nIn other words, this excludes nodes which would otherwise show up empty\non the graph (i.e. with no connections or members).";
