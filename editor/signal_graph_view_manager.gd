@@ -6,39 +6,8 @@ extends Node
 const COL_MAIN : int = 0;
 const COL_BUTTONS : int = 1;
 
-var global_views : Dictionary = {
-#	"(default)": {
-#		"view_rules": {
-#			"object_source": [
-#				{
-#					"id": "scene_signals:nodes_with_connections",
-#					"params": {}
-#				}
-#			],
-#			"member_source": [
-#				{
-#					"id": "scene_signals:members_with_connections",
-#					"params": {}
-#				}
-#			]
-#		}
-#	}
-}
-
-var local_views : Dictionary = {
-#	"(blank)": {
-#		"view_rules": {
-#			"object_source": [
-#			],
-#			"member_source": [
-#				{
-#					"id": "scene_signals:members_with_connections",
-#					"params": {}
-#				}
-#			]
-#		}
-#	}
-}
+var global_views : Dictionary = {}
+var local_views : Dictionary = {}
 
 var active_local_view_metadata : Dictionary = {};
 var active_local_view : SignalGraphView;
@@ -61,27 +30,37 @@ func _enter_tree() -> void:
 
 func _test_save() -> void:
 	print("test save");
-	print(var_to_str(serialize_scene_state()));
+	print(var_to_str(store_scene_state()));
 	
-func serialize_scene_state() -> Dictionary:
+func store_scene_state() -> Dictionary:
 	var serialized_scene_state := {
+		"active_view": active_local_view_metadata,
+		"local_views": {}
+	};
+	var runtime_scene_state := {
 		"active_view": active_local_view_metadata,
 		"local_views": {}
 	};
 	for view_name in local_views:
 		serialized_scene_state.local_views[view_name] = local_views[view_name].serialize();
-	return serialized_scene_state;
+		runtime_scene_state.local_views[view_name] = local_views[view_name];
+	return {
+		"serialized": serialized_scene_state,
+		"runtime": runtime_scene_state
+	};
 
-func deserialize_scene_state(serialized_scene_state : Dictionary) -> void:
+func restore_scene_state(scene_states : Dictionary) -> void:
+	var scene_state = scene_states["runtime"] if scene_states.get("runtime", null) else scene_states["serialized"];
 	local_views.clear();
-	if serialized_scene_state.has("local_views"):
-		for view_name in serialized_scene_state.local_views:
-			local_views[view_name] = SignalGraphView.new(editor).deserialize(serialized_scene_state.local_views[view_name]);
+	if scene_state.has("local_views"):
+		for view_name in scene_state.local_views:
+			var view_value = scene_state.local_views[view_name];
+			local_views[view_name] = view_value if view_value is SignalGraphView else SignalGraphView.new(editor).deserialize(scene_state.local_views[view_name]);
 	
 	repopulate_view_dropdown();
 	
-	if serialized_scene_state.has("active_view"):
-		activate_view(serialized_scene_state["active_view"]);
+	if scene_state.has("active_view"):
+		activate_view(scene_state["active_view"]);
 		ensure_valid_view_active();
 	else:
 		activate_view(get_fallback_local_view_metadata());

@@ -14,7 +14,7 @@ enum PluginMode {
 };
 
 var graph_editor_template : PackedScene = preload(PLUGIN_ROOT + "/scenes/signal_graph_editor.tscn");
-var _graph_editor : EditorDock;
+var _dock : EditorDock;
 
 var settings : Settings;
 var persistence : Persistence;
@@ -34,27 +34,27 @@ func _exit_tree() -> void:
 	remove_editor();
 
 func create_editor() -> void:
-	_graph_editor = graph_editor_template.instantiate();
-	_graph_editor.plugin = self;
+	_dock = graph_editor_template.instantiate();
+	_dock.plugin = self;
 	if _has_main_screen():
-		EditorInterface.get_editor_main_screen().add_child(_graph_editor);
-		_graph_editor.visible = false;
+		EditorInterface.get_editor_main_screen().add_child(_dock);
+		_dock.visible = false;
 	else:
-		add_dock(_graph_editor);
+		add_dock(_dock);
 	
 func remove_editor() -> void:
-	if _graph_editor == null:
+	if _dock == null:
 		return;
 	if _has_main_screen():
-		EditorInterface.get_editor_main_screen().remove_child(_graph_editor);
+		EditorInterface.get_editor_main_screen().remove_child(_dock);
 	else:
-		remove_dock(_graph_editor);
-	_graph_editor.queue_free();
-	_graph_editor = null;
+		remove_dock(_dock);
+	_dock.queue_free();
+	_dock = null;
 
 func _make_visible(visible: bool) -> void:
 	if _has_main_screen():
-		_graph_editor.visible = visible;
+		_dock.visible = visible;
 		
 func _get_state() -> Dictionary:
 	return persistence.get_scene_state();
@@ -172,6 +172,7 @@ class Persistence extends RefCounted:
 	
 	var editor_data_cache : Dictionary = {};
 	var scene_data_cache : Dictionary = {};
+	var scene_runtime_cache : Dictionary = {};
 	
 	var _pending_scene_state : Dictionary;
 	var _active_scene_identifier : String;
@@ -196,13 +197,14 @@ class Persistence extends RefCounted:
 		
 		var scene_data := get_scene_data(_active_scene_identifier, saved_scene_identifier);
 #		print("Loaded scene data: " + str(scene_data));
-		plugin._graph_editor.load_scene(scene_data);
+		plugin._dock.set_scene_state(scene_data);
 	
 	func _on_scene_closed(filepath : String) -> void:
 #		print("Scene closed: " + filepath);
 		if filepath:
 			var scene_identifier := generate_scene_identifier_from_path(filepath);
 			scene_data_cache.erase(scene_identifier);
+			scene_runtime_cache.erase(scene_identifier);
 		pass;
 	
 	func _on_scene_saved(filepath : String) -> void:
@@ -223,7 +225,8 @@ class Persistence extends RefCounted:
 		var state := {
 			"scene_identifier": _active_scene_identifier
 		};
-		set_scene_data(_active_scene_identifier, plugin._graph_editor.get_scene_state());
+		var scene_data : Dictionary = plugin._dock.get_scene_state();
+		set_scene_data(_active_scene_identifier, scene_data);
 #		print("Saving state: " + str(state));
 		return state;
 	
@@ -264,12 +267,22 @@ class Persistence extends RefCounted:
 	func get_scene_data(scene_identifier : String, fallback_scene_identifier : String) -> Dictionary:
 		if !scene_identifier: return {}
 		if scene_data_cache.has(scene_identifier):
-			return scene_data_cache[scene_identifier];
+			return {
+				"serialized": scene_data_cache[scene_identifier],
+				"runtime": scene_runtime_cache[scene_identifier],
+			};
 		if fallback_scene_identifier && scene_data_cache.has(fallback_scene_identifier):
-			return scene_data_cache[fallback_scene_identifier];
+			return {
+				"serialized": scene_data_cache[fallback_scene_identifier],
+				"runtime": scene_runtime_cache[fallback_scene_identifier],
+			};
 		var loaded := _load_scene_data(fallback_scene_identifier if fallback_scene_identifier else scene_identifier);
 		scene_data_cache[scene_identifier] = loaded;
-		return loaded;
+		scene_runtime_cache[scene_identifier] = null;
+		return {
+			"serialized": loaded,
+			"runtime": null
+		};
 		
 	func _load_scene_data(scene_identifier : String) -> Dictionary:
 		var path := get_scene_data_save_path(scene_identifier);
@@ -282,7 +295,8 @@ class Persistence extends RefCounted:
 	
 	func set_scene_data(scene_identifier : String, scene_data : Dictionary) -> void:
 		if !scene_identifier: return;
-		scene_data_cache[scene_identifier] = scene_data;
+		scene_data_cache[scene_identifier] = scene_data["serialized"];
+		scene_runtime_cache[scene_identifier] = scene_data["runtime"];
 	
 	func _save_editor_data(editor_data : Dictionary) -> void:
 		var path := EDITOR_STATE_FILE;
@@ -310,11 +324,11 @@ class Persistence extends RefCounted:
 		return loaded;
 	
 	func _on_editor_layout_saving() -> void:
-		editor_data_cache = plugin._graph_editor.get_editor_state();
+		editor_data_cache = plugin._dock.get_editor_state();
 		_save_editor_data(editor_data_cache);
 	
 	func _on_editor_layout_loading() -> void:
-		plugin._graph_editor.set_editor_state(get_editor_data());
+		plugin._dock.set_editor_state(get_editor_data());
 	
 	func _on_plugin_enabled() -> void:
 		_on_scene_changed(EditorInterface.get_edited_scene_root());

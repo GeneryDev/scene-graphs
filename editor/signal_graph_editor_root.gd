@@ -14,11 +14,11 @@ func populate_from_scene() -> void:
 	editor.load(view_manager.active_local_view);
 
 func get_scene_state() -> Dictionary:
-	return view_manager.serialize_scene_state();
+	return view_manager.store_scene_state();
 
-func load_scene(scene_state : Dictionary) -> void:
+func set_scene_state(scene_state : Dictionary) -> void:
 	editor.clear();
-	view_manager.deserialize_scene_state(scene_state);
+	view_manager.restore_scene_state(scene_state);
 
 func get_editor_state() -> Dictionary:
 	return view_manager.serialize_editor_state();
