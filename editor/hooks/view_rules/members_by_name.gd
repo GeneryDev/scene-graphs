@@ -34,11 +34,11 @@ func populate_view_object_members(object_type : String, obj : Object, params : P
 	
 	for method_name in params.methods:
 		if !obj.has_method(method_name): continue;
-		if editor.view.add_object_view_member(object_type, obj, MEMBER_TYPE_METHOD, method_name):
+		if editor.current_view.add_object_view_member(object_type, obj, MEMBER_TYPE_METHOD, method_name):
 			any_changes = true;
 	for signal_name in params.signals:
 		if !(obj.has_signal(signal_name) || obj.has_user_signal(signal_name)): continue;
-		if editor.view.add_object_view_member(object_type, obj, MEMBER_TYPE_SIGNAL, signal_name):
+		if editor.current_view.add_object_view_member(object_type, obj, MEMBER_TYPE_SIGNAL, signal_name):
 			any_changes = true;
 	return any_changes;
 

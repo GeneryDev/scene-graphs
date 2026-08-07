@@ -7,41 +7,41 @@ const COL_MAIN : int = 0;
 const COL_BUTTONS : int = 1;
 
 var global_views : Dictionary = {
-	"(default)": {
-		"view_rules": {
-			"object_source": [
-				{
-					"id": "scene_signals:nodes_with_connections",
-					"params": {}
-				}
-			],
-			"member_source": [
-				{
-					"id": "scene_signals:members_with_connections",
-					"params": {}
-				}
-			]
-		}
-	}
+#	"(default)": {
+#		"view_rules": {
+#			"object_source": [
+#				{
+#					"id": "scene_signals:nodes_with_connections",
+#					"params": {}
+#				}
+#			],
+#			"member_source": [
+#				{
+#					"id": "scene_signals:members_with_connections",
+#					"params": {}
+#				}
+#			]
+#		}
+#	}
 }
 
 var local_views : Dictionary = {
-	"(blank)": {
-		"view_rules": {
-			"object_source": [
-			],
-			"member_source": [
-				{
-					"id": "scene_signals:members_with_connections",
-					"params": {}
-				}
-			]
-		}
-	}
+#	"(blank)": {
+#		"view_rules": {
+#			"object_source": [
+#			],
+#			"member_source": [
+#				{
+#					"id": "scene_signals:members_with_connections",
+#					"params": {}
+#				}
+#			]
+#		}
+#	}
 }
 
 var active_local_view_metadata : Dictionary = {};
-var active_local_view : Dictionary;
+var active_local_view : SignalGraphView;
 
 var edit_views_dialog : EditViewsDialog;
 
@@ -69,19 +69,20 @@ func serialize_scene_state() -> Dictionary:
 		"local_views": {}
 	};
 	for view_name in local_views:
-		serialized_scene_state.local_views[view_name] = _serialize_view(local_views[view_name]);
+		serialized_scene_state.local_views[view_name] = local_views[view_name].serialize();
 	return serialized_scene_state;
 
 func deserialize_scene_state(serialized_scene_state : Dictionary) -> void:
 	local_views.clear();
 	if serialized_scene_state.has("local_views"):
 		for view_name in serialized_scene_state.local_views:
-			local_views[view_name] = _deserialize_view(serialized_scene_state.local_views[view_name]);
+			local_views[view_name] = SignalGraphView.new(editor).deserialize(serialized_scene_state.local_views[view_name]);
 	
 	repopulate_view_dropdown();
 	
 	if serialized_scene_state.has("active_view"):
 		activate_view(serialized_scene_state["active_view"]);
+		ensure_valid_view_active();
 	else:
 		activate_view(get_fallback_local_view_metadata());
 	
@@ -90,14 +91,14 @@ func serialize_editor_state() -> Dictionary:
 		"global_views": {}
 	};
 	for view_name in global_views:
-		serialized_editor_state.global_views[view_name] = _serialize_view(global_views[view_name]);
+		serialized_editor_state.global_views[view_name] = (global_views[view_name] as SignalGraphView).serialize();
 	return serialized_editor_state;
 
 func deserialize_editor_state(serialized_editor_state : Dictionary) -> void:
 	global_views.clear();
 	if serialized_editor_state.has("global_views"):
 		for view_name in serialized_editor_state.global_views:
-			global_views[view_name] = _deserialize_view(serialized_editor_state.global_views[view_name]);
+			global_views[view_name] = SignalGraphView.new(editor).deserialize(serialized_editor_state.global_views[view_name]);
 	
 	repopulate_view_dropdown();
 	
@@ -106,39 +107,11 @@ func deserialize_editor_state(serialized_editor_state : Dictionary) -> void:
 	if _pending_local_view_activation:
 		activate_view(_pending_local_view_activation);
 		_pending_local_view_activation = {};
+		ensure_valid_view_active();
 
-func _serialize_view(runtime_view_data : Dictionary) -> Dictionary:
-	var serialized := runtime_view_data.duplicate(false);
-	if serialized.has("scene_data") && serialized.scene_data.has("objects"):
-		serialized.scene_data = serialized.scene_data.duplicate(false);
-		var serialized_objects : Dictionary = {};
-		serialized.scene_data.objects = serialized_objects;
-		var runtime_objects : Dictionary = runtime_view_data.scene_data.objects;
-		for object_type in runtime_objects:
-			var serialized_objects_of_type := {};
-			serialized_objects[object_type] = serialized_objects_of_type;
-			var runtime_objects_of_type = runtime_objects[object_type];
-			for runtime_key in runtime_objects_of_type:
-				var serialized_key = editor.view.runtime_key_serialize(object_type, runtime_key);
-				if serialized_key == null: continue;
-				serialized_objects_of_type[serialized_key] = runtime_objects_of_type[runtime_key];
-	return serialized;
-
-func _deserialize_view(serialized_view_data : Dictionary) -> Dictionary:
-	var runtime_view_data := serialized_view_data.duplicate(false);
-	if runtime_view_data.has("scene_data") && runtime_view_data.scene_data.has("objects"):
-		runtime_view_data.scene_data = runtime_view_data.scene_data.duplicate(false);
-		var runtime_objects : Dictionary = {};
-		runtime_view_data.scene_data.objects = runtime_objects;
-		var serialized_objects : Dictionary = serialized_view_data.scene_data.objects;
-		for object_type in serialized_objects:
-			var runtime_objects_of_type := {};
-			runtime_objects[object_type] = runtime_objects_of_type;
-			var serialized_objects_of_type = serialized_objects[object_type];
-			for serialized_key in serialized_objects_of_type:
-				var runtime_key = editor.view.runtime_key_deserialize(object_type, serialized_key);
-				runtime_objects_of_type[runtime_key] = serialized_objects_of_type[serialized_key];
-	return runtime_view_data;
+func ensure_valid_view_active() -> void:
+	if !active_local_view_metadata || !get_view(active_local_view_metadata):
+		activate_view(get_fallback_local_view_metadata());
 
 func populate_view_dropdown(dropdown : OptionButton) -> void:
 	var theme := EditorInterface.get_editor_theme();
@@ -164,29 +137,29 @@ func set_view_dropdown(dropdown : OptionButton, metadata : Dictionary) -> void:
 				dropdown.select(item_idx);
 			break;
 
-func get_localized_view(view_name : String) -> Dictionary:
+func get_localized_view(view_name : String) -> SignalGraphView:
 	if local_views.has(view_name):
 		return local_views[view_name];
 	else:
-		return {};
+		return null;
 
-func localize_global_view(view_name : String) -> Dictionary:
-	var global_view_data : Dictionary = global_views[view_name];
-	var existing_local_view_data : Dictionary;
+func localize_global_view(view_name : String) -> SignalGraphView:
+	var global_view : SignalGraphView = global_views[view_name];
+	var existing_local_view : SignalGraphView;
 	if local_views.has(view_name):
-		existing_local_view_data = local_views[view_name];
+		existing_local_view = local_views[view_name];
 	else:
-		existing_local_view_data = {};
-	existing_local_view_data.view_rules = global_view_data.view_rules;
-	local_views[view_name] = existing_local_view_data;
-	return existing_local_view_data;
+		existing_local_view = SignalGraphView.new(editor);
+	existing_local_view.copy_non_scene_data_from(global_view);
+	local_views[view_name] = existing_local_view;
+	return existing_local_view;
 
-func globalize_local_view(view_name : String) -> Dictionary:
-	var local_view_data : Dictionary = local_views[view_name];
-	var globalized_view_data := {};
-	globalized_view_data.view_rules = local_view_data.view_rules; 
-	global_views[view_name] = globalized_view_data;
-	return globalized_view_data;
+func globalize_local_view(view_name : String) -> SignalGraphView:
+	var local_view : SignalGraphView = local_views[view_name];
+	var globalized_view := SignalGraphView.new(editor);
+	globalized_view.copy_non_scene_data_from(local_view);
+	global_views[view_name] = globalized_view;
+	return globalized_view;
 
 func view_name_exists(name : String) -> bool:
 	return global_views.has(name) || local_views.has(name);
@@ -200,12 +173,12 @@ func activate_view(metadata : Dictionary) -> void:
 				if !_editor_state_fully_loaded:
 					_pending_local_view_activation = metadata;
 				else:
-					printerr("Failed to activate " + metadata.view_type + " view '" + view_name + "': No such view exists");
+					printerr("Failed to activate global view '" + view_name + "': No such view exists");
 				return;
 			active_local_view = localize_global_view(view_name);
 		"local":
 			if !local_views.has(view_name):
-				printerr("Failed to activate " + metadata.view_type + " view '" + view_name + "': No such view exists");
+				printerr("Failed to activate local view '" + view_name + "': No such view exists");
 				return;
 			active_local_view = local_views[view_name];
 	active_local_view_metadata = metadata;
@@ -213,14 +186,14 @@ func activate_view(metadata : Dictionary) -> void:
 	editor.load(active_local_view);
 	set_view_dropdown(%"View Dropdown", metadata);
 
-func get_view_data(metadata : Dictionary) -> Dictionary:
+func get_view(metadata : Dictionary) -> SignalGraphView:
 	match metadata.view_type:
 		"global":
 			return global_views[metadata.view_name];
 		"local":
 			return local_views[metadata.view_name];
 	printerr("Invalid view metadata '" + str(metadata) + "'");
-	return {};
+	return null;
 
 func change_view_type(metadata : Dictionary, new_type : String) -> Dictionary:
 	if metadata.view_type == new_type: return metadata;
@@ -246,23 +219,21 @@ func repopulate_view_dropdown() -> void:
 	populate_view_dropdown(view_dropdown);
 	set_view_dropdown(view_dropdown, active_local_view_metadata);
 
-func create_view(metadata : Dictionary, from_existing_view_data : Dictionary = {}) -> Dictionary:
+func create_view(metadata : Dictionary, from_existing_view : SignalGraphView = null) -> Dictionary:
 	var view_name : String = metadata.view_name;
 	if view_name_exists(view_name):
 		EditorInterface.get_editor_toaster().push_toast("Cannot create view: name '" + view_name + "' is already taken.", EditorToaster.SEVERITY_ERROR);
 		return metadata;
 	var view_type : String = metadata.view_type;
-	var new_view_data := {};
-	if from_existing_view_data:
-		new_view_data = {
-			"view_rules": from_existing_view_data.view_rules.duplicate_deep(Resource.DEEP_DUPLICATE_NONE)
-		};
-	sanitize_view_rules(new_view_data);
+	var new_view := SignalGraphView.new(editor);
+	if from_existing_view:
+		new_view.copy_non_scene_data_from(from_existing_view, true);
+	sanitize_view_rules(new_view);
 	match view_type:
 		"local":
-			local_views[view_name] = new_view_data;
+			local_views[view_name] = new_view;
 		"global":
-			global_views[view_name] = new_view_data;
+			global_views[view_name] = new_view;
 			localize_global_view(view_name);
 	repopulate_view_dropdown();
 	return metadata;
@@ -291,9 +262,9 @@ func remove_view(metadata : Dictionary) -> void:
 	
 	global_views.erase(view_name);
 	local_views.erase(view_name);
-	if active_local_view_metadata.view_name == metadata.view_name:
-		active_local_view_metadata = get_fallback_local_view_metadata();
 	repopulate_view_dropdown();
+	if active_local_view_metadata.view_name == metadata.view_name:
+		activate_view(get_fallback_local_view_metadata())
 
 func clear_local_view_data(metadata : Dictionary) -> void:
 	var view_name : String = metadata.view_name;
@@ -301,7 +272,7 @@ func clear_local_view_data(metadata : Dictionary) -> void:
 	
 	match view_type:
 		"local":
-			local_views[view_name].erase("scene_data");
+			local_views[view_name].clear_scene_data();
 		"global":
 			local_views.erase(view_name);
 			localize_global_view(view_name);
@@ -321,15 +292,35 @@ func get_fallback_local_view_metadata() -> Dictionary:
 	return _help_no_views_available();
 
 func _help_no_views_available() -> Dictionary:
-	return create_view({
-		"view_name": "(empty)",
-		"view_type": "local"
-	});
+	return create_default_view();
 
-func sanitize_view_rules(view_data : Dictionary) -> void:
-	view_data.get_or_add("view_rules", {});
-	view_data.view_rules.get_or_add("object_source", []);
-	view_data.view_rules.get_or_add("member_source", []);
+func create_default_view() -> Dictionary:
+	var metadata := {
+		"view_name": "(default)",
+		"view_type": "global"
+	};
+	var serialized_view_data := {
+		"view_rules": {
+			"object_source": [
+				{
+					"id": "scene_signals:nodes_with_connections",
+					"params": {}
+				}
+			],
+			"member_source": [
+				{
+					"id": "scene_signals:members_with_connections",
+					"params": {}
+				}
+			]
+		}
+	};
+	return create_view(metadata, SignalGraphView.new(editor).deserialize(serialized_view_data));
+
+func sanitize_view_rules(view : SignalGraphView) -> void:
+	if !view: return;
+	view.view_rules.get_or_add("object_source", []);
+	view.view_rules.get_or_add("member_source", []);
 
 func reapply_rules() -> void:
 	activate_view(active_local_view_metadata);
@@ -367,7 +358,7 @@ class EditViewsDialog extends RefCounted:
 	var editor : SignalGraphEditor;
 	var view_manager : Object;
 	
-	var editing_view : Dictionary;
+	var editing_view : SignalGraphView;
 	var editing_view_metadata : Dictionary;
 	
 	func _init(editor : SignalGraphEditor, view_manager : Object):
@@ -391,7 +382,7 @@ class EditViewsDialog extends RefCounted:
 	
 	func edit_view(metadata : Dictionary) -> void:
 		editing_view_metadata = metadata;
-		editing_view = view_manager.get_view_data(editing_view_metadata);
+		editing_view = view_manager.get_view(editing_view_metadata);
 		
 		_populate_tree();
 		_populate_toolbar(editing_view_metadata);
@@ -431,16 +422,9 @@ class EditViewsDialog extends RefCounted:
 		var scene_name_label : Label = _active["scene_name_label"];
 		scene_name_label.text = "This Scene (" + editor.scene_root.scene_file_path.get_file() + ")";
 		
-		var localized_view_data = view_manager.get_localized_view(metadata.view_name);
+		var localized_view : SignalGraphView = view_manager.get_localized_view(metadata.view_name);
 		
-		if localized_view_data.has("scene_data") && localized_view_data.scene_data.has("objects"):
-			var total_graph_nodes := 0;
-			for object_type in localized_view_data.scene_data.objects:
-				total_graph_nodes += localized_view_data.scene_data.objects[object_type].size();
-			_active["graph_node_count_label"].text = str(total_graph_nodes);
-		else:
-			_active["graph_node_count_label"].text = "Unknown";
-		
+		_active["graph_node_count_label"].text = str(localized_view.get_scene_object_count()) if localized_view.has_any_scene_data() else "Unknown";
 	
 	func _make_global(global : bool) -> void:
 		var new_metadata : Dictionary = view_manager.change_view_type(editing_view_metadata, "global" if global else "local");
@@ -466,9 +450,9 @@ class EditViewsDialog extends RefCounted:
 		if rules:
 			for rule_obj in rules:
 				var rule_item := tree.create_item(rule_type_item);
-				var hook : Object = editor.view.get_view_rule_hook(rule_obj.id, rule_type);
+				var hook : Object = editor.current_view.get_view_rule_hook(rule_obj.id, rule_type);
 				if hook:
-					rule_item.set_text(COL_MAIN, hook.get_view_rule_label(editor.view.rule_params_from_dict(hook, rule_obj.get("params") as Dictionary)));
+					rule_item.set_text(COL_MAIN, hook.get_view_rule_label(editor.current_view.rule_params_from_dict(hook, rule_obj.get("params") as Dictionary)));
 				else:
 					rule_item.set_text(COL_MAIN, rule_obj.id);
 				rule_item.set_icon(COL_MAIN, theme.get_icon("TripleBar", "EditorIcons"));
@@ -552,12 +536,12 @@ class EditViewsDialog extends RefCounted:
 		var rule_arr : Array = editing_view.view_rules[rule_type];
 		var rule_obj = rule_arr[rule_index];
 		var dialog : Window = load("res://addons/signal-graphs/scenes/signal_graph_view_rule_edit_dialog.tscn").instantiate();
-		var hook : Object = editor.view.get_view_rule_hook(rule_obj.id, rule_type);
-		dialog.setup(rule_type, editor.view.get_view_rule_hooks(rule_type), hook, editor.view.rule_params_from_dict(hook, rule_obj.get("params") as Dictionary));
+		var hook : Object = editor.current_view.get_view_rule_hook(rule_obj.id, rule_type);
+		dialog.setup(rule_type, editor.current_view.get_view_rule_hooks(rule_type), hook, editor.current_view.rule_params_from_dict(hook, rule_obj.get("params") as Dictionary));
 		dialog.rule_selected.connect(func (selected_hook : Object, selected_params : Variant) -> void:
 			rule_arr[rule_index] = {
 				"id": selected_hook.get_view_rule_id(),
-				"params": editor.view.rule_params_to_dict(selected_hook, selected_params)
+				"params": editor.current_view.rule_params_to_dict(selected_hook, selected_params)
 			};
 			call_deferred(&"_populate_tree");
 		);
@@ -566,11 +550,11 @@ class EditViewsDialog extends RefCounted:
 	func add_rule(rule_type : String) -> void:
 		var rule_arr : Array = editing_view.view_rules[rule_type];
 		var dialog : Window = load("res://addons/signal-graphs/scenes/signal_graph_view_rule_edit_dialog.tscn").instantiate();
-		dialog.setup(rule_type, editor.view.get_view_rule_hooks(rule_type), null, null);
+		dialog.setup(rule_type, editor.current_view.get_view_rule_hooks(rule_type), null, null);
 		dialog.rule_selected.connect(func (selected_hook : Object, selected_params : Variant) -> void:
 			rule_arr.append({
 				"id": selected_hook.get_view_rule_id(),
-				"params": editor.view.rule_params_to_dict(selected_hook, selected_params)
+				"params": editor.current_view.rule_params_to_dict(selected_hook, selected_params)
 			});
 			call_deferred(&"_populate_tree");
 		);
@@ -692,7 +676,7 @@ class EditViewsDialog extends RefCounted:
 		edit_view(new_metadata);
 	
 	func _duplicate_view(existing_metadata : Dictionary, new_metadata : Dictionary) -> void:
-		new_metadata = view_manager.create_view(new_metadata, view_manager.get_view_data(existing_metadata));
+		new_metadata = view_manager.create_view(new_metadata, view_manager.get_view(existing_metadata));
 		repopulate_view_dropdown();
 		edit_view(new_metadata);
 	

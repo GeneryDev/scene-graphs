@@ -66,7 +66,7 @@ func _update_connection_cache() -> void:
 		var method_name := method_info["name"] as StringName;
 		if seen_method_names.has(method_name): continue;
 		seen_method_names.append(method_name);
-		if !editor.view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD, method_name): continue;
+		if !editor.current_view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD, method_name): continue;
 		
 		for method_connection in incoming_connections:
 			if(method_connection.flags & CONNECT_PERSIST) == 0: continue;
@@ -76,7 +76,7 @@ func _update_connection_cache() -> void:
 			if source is Node && !(editor.scene_root != null && (source == editor.scene_root || editor.scene_root.is_ancestor_of(source))):
 				# connected to orphan node, skip;
 				continue;
-			if !editor.view.has_object_view(OBJECT_TYPE_NODE, source):
+			if !editor.current_view.has_object_view(OBJECT_TYPE_NODE, source):
 				_connections_not_in_view.append({
 					"port_type": editor.port_type(&"method"),
 					"member_name": method_name,
@@ -85,13 +85,13 @@ func _update_connection_cache() -> void:
 	
 	for signal_info in obj.get_signal_list():
 		var signal_name := signal_info["name"] as StringName;
-		if !editor.view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_SIGNAL, signal_name): continue;
+		if !editor.current_view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_SIGNAL, signal_name): continue;
 		
 		for signal_connection in obj.get_signal_connection_list(signal_name):
 			if(signal_connection.flags & CONNECT_PERSIST) == 0: continue;
 			var callable : Callable = signal_connection.callable;
 			var target : Object = callable.get_object();
-			if !editor.view.has_object_view(OBJECT_TYPE_NODE, target):
+			if !editor.current_view.has_object_view(OBJECT_TYPE_NODE, target):
 				_connections_not_in_view.append({
 					"port_type": editor.port_type(&"signal"),
 					"member_name": signal_name,
@@ -100,7 +100,7 @@ func _update_connection_cache() -> void:
 
 func update_from_view() -> void:
 	var obj := get_object();
-	var obj_view = editor.view.get_object_view(OBJECT_TYPE_NODE, obj);
+	var obj_view := editor.current_view.get_object_view(OBJECT_TYPE_NODE, obj);
 	
 	rebuild_contents_from_view();
 	
@@ -109,7 +109,7 @@ func update_from_view() -> void:
 	
 func update_view() -> void:
 	var obj := get_object();
-	var obj_view = editor.view.get_object_view(OBJECT_TYPE_NODE, obj);
+	var obj_view := editor.current_view.get_object_view(OBJECT_TYPE_NODE, obj);
 	if !obj_view: return;
 	
 	obj_view["position_offset"] = position_offset;
@@ -165,7 +165,7 @@ func add_signal_ports(obj : Object) -> bool:
 	var any_ports := false;
 	_signal_ports.clear();
 	var left_port_index := 0;
-	for signal_name in editor.view.get_object_view_members(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_SIGNAL):
+	for signal_name in editor.current_view.get_object_view_members(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_SIGNAL):
 		var signal_info := get_signal_info_by_name(obj, signal_name);
 		
 		var row_control := _create_row("", signal_name, SignalGraphEditor.ICON_NAME_SIGNAL);
@@ -195,7 +195,7 @@ func add_method_ports(obj : Object) -> bool:
 	_method_ports.clear();
 	var right_port_index := 0;
 	
-	for method_name in editor.view.get_object_view_members(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD):
+	for method_name in editor.current_view.get_object_view_members(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD):
 		var method_info := get_method_info_by_name(obj, method_name);
 		if _method_ports.has(method_name):
 			continue; # skip method overloads
@@ -301,11 +301,11 @@ func get_method_slot_name(slot_index : int) -> StringName:
 
 func method_add_requested(method_info : Dictionary) -> void:
 	var method_name := method_info["name"] as StringName;
-	editor.view.transactions.add_object_view_member(OBJECT_TYPE_NODE, get_object(), MEMBER_TYPE_METHOD, method_name);
+	editor.current_view.transactions.add_object_view_member(OBJECT_TYPE_NODE, get_object(), MEMBER_TYPE_METHOD, method_name);
 
 func signal_add_requested(signal_info : Dictionary) -> void:
 	var signal_name := signal_info["name"] as StringName;
-	editor.view.transactions.add_object_view_member(OBJECT_TYPE_NODE, get_object(), MEMBER_TYPE_SIGNAL, signal_name);
+	editor.current_view.transactions.add_object_view_member(OBJECT_TYPE_NODE, get_object(), MEMBER_TYPE_SIGNAL, signal_name);
 
 func _on_position_offset_changed() -> void:
 	update_view();

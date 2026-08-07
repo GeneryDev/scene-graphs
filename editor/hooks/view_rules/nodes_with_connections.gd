@@ -50,9 +50,9 @@ func _update_object_view_with_rules(node : Node, params : Params) -> bool:
 	if !node: return false;
 	
 	if _should_include_node(node, params):
-		return editor.view.add_object_view(OBJECT_TYPE_NODE, node);
+		return editor.current_view.add_object_view(OBJECT_TYPE_NODE, node);
 	elif false:
-		return editor.view.remove_object_view(OBJECT_TYPE_NODE, node);
+		return editor.current_view.remove_object_view(OBJECT_TYPE_NODE, node);
 	else:
 		return false;
 
