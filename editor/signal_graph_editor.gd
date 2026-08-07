@@ -237,7 +237,7 @@ class Hooks extends RefCounted:
 		"view_rule.object_source": {
 			"required_methods": [
 				&"get_view_rule_id",
-				&"populate_view_objects",
+				&"generate_view_objects",
 				&"get_view_rule_label"
 			],
 			"hooks": [] as Array[Object]
@@ -245,7 +245,7 @@ class Hooks extends RefCounted:
 		"view_rule.member_source": {
 			"required_methods": [
 				&"get_view_rule_id",
-				&"populate_view_object_members",
+				&"generate_view_object_members",
 				&"get_view_rule_label"
 			],
 			"hooks": [] as Array[Object]
@@ -941,6 +941,3 @@ class Frames extends RefCounted:
 			editor.transactions.attach_to_frame(frame.name, common_frame_name, false);
 			
 		editor.transactions.end_transaction();
-
-class View extends RefCounted:
-	signal view_updated();

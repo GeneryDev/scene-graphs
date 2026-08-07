@@ -31,28 +31,32 @@ func get_view_rule_label(params : Params) -> String:
 		label = "All Nodes"
 	return label;
 
-func populate_view_objects(params : Params) -> bool:
-	return _update_node_views_with_rules(editor.scene_root, params);
+func generate_view_objects(params : Params) -> Array:
+	var objects := [];
+	_update_node_views_with_rules(editor.scene_root, params, objects);
+	return objects;
 
-func _update_node_views_with_rules(node : Node, params : Params) -> bool:
+func _update_node_views_with_rules(node : Node, params : Params, objects : Array) -> bool:
 	if !node: return false;
 	if !(node == editor.scene_root || node.owner == editor.scene_root): return false;
 	
-	var any_changes := _update_object_view_with_rules(node, params);
+	var any_changes := _update_object_view_with_rules(node, params, objects);
 	
 	for child in node.get_children():
-		if _update_node_views_with_rules(child, params):
+		if _update_node_views_with_rules(child, params, objects):
 			any_changes = true;
 	
 	return any_changes;
 
-func _update_object_view_with_rules(node : Node, params : Params) -> bool:
+func _update_object_view_with_rules(node : Node, params : Params, objects : Array) -> bool:
 	if !node: return false;
 	
 	if _should_include_node(node, params):
-		return editor.current_view.add_object_view(OBJECT_TYPE_NODE, node);
-	elif false:
-		return editor.current_view.remove_object_view(OBJECT_TYPE_NODE, node);
+		objects.append({
+			"object_type": OBJECT_TYPE_NODE,
+			"object": node
+		});
+		return true;
 	else:
 		return false;
 

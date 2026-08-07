@@ -238,7 +238,11 @@ func update_object_views_with_rules() -> void:
 		var raw_params : Dictionary = rule_entry.get("params");
 		var rule_hook := get_view_rule_hook(id, "object_source");
 		if !rule_hook: continue;
-		rule_hook.populate_view_objects(rule_params_from_dict(rule_hook, raw_params));
+		var objects : Array = rule_hook.generate_view_objects(rule_params_from_dict(rule_hook, raw_params));
+		for entry in objects:
+			var object_type : String = entry.object_type;
+			var object : Object = entry.object;
+			add_object_view(object_type, object);
 
 func update_object_member_views_with_rules(object_type : String, obj : Object) -> void:
 	for rule_entry in get_view_rules_of_type("member_source"):
@@ -246,7 +250,11 @@ func update_object_member_views_with_rules(object_type : String, obj : Object) -
 		var raw_params : Dictionary = rule_entry.get("params");
 		var rule_hook := get_view_rule_hook(id, "member_source");
 		if !rule_hook: continue;
-		rule_hook.populate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
+		var members : Array = rule_hook.generate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
+		for member in members:
+			var member_type : String = member.member_type;
+			var member_name : StringName = member.member_name;
+			add_object_view_member(object_type, obj, member_type, member_name);
 
 func update_all_object_member_views_with_rules() -> void:
 	for object_type in get_all_scene_object_views():
@@ -260,7 +268,11 @@ func update_all_object_member_views_with_rules() -> void:
 			for runtime_key in object_views:
 				var obj : Object = runtime_key_to_view_object(object_type, runtime_key);
 				if !obj: continue;
-				rule_hook.populate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
+				var members : Array = rule_hook.generate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
+				for member in members:
+					var member_type : String = member.member_type;
+					var member_name : String = member.member_name;
+					add_object_view_member(object_type, obj, member_type, member_name);
 
 func get_scene_object_count() -> int:
 	var total := 0;

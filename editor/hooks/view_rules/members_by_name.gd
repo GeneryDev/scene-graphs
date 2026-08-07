@@ -29,18 +29,23 @@ func get_view_rule_label(params : Params) -> String:
 		label = "(members by name)"
 	return label;
 
-func populate_view_object_members(object_type : String, obj : Object, params : Params) -> bool:
-	var any_changes := false;
+func generate_view_object_members(object_type : String, obj : Object, params : Params) -> Array:
+	var members := [];
 	
 	for method_name in params.methods:
 		if !obj.has_method(method_name): continue;
-		if editor.current_view.add_object_view_member(object_type, obj, MEMBER_TYPE_METHOD, method_name):
-			any_changes = true;
+		members.append({
+			"member_type": MEMBER_TYPE_METHOD,
+			"member_name": method_name
+		});
 	for signal_name in params.signals:
 		if !(obj.has_signal(signal_name) || obj.has_user_signal(signal_name)): continue;
-		if editor.current_view.add_object_view_member(object_type, obj, MEMBER_TYPE_SIGNAL, signal_name):
-			any_changes = true;
-	return any_changes;
+		members.append({
+			"member_type": MEMBER_TYPE_SIGNAL,
+			"member_name": signal_name
+		});
+	
+	return members;
 
 func create_view_rule_params() -> Object:
 	return Params.new();
