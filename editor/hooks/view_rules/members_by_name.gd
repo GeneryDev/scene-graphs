@@ -26,7 +26,7 @@ func get_view_rule_label(params : Params) -> String:
 		label += "Signals: ";
 		label += ", ".join(params.signals);
 	if label.is_empty():
-		label = "(members by name)"
+		label = "Members by name"
 	return label;
 
 func generate_view_object_members(object_type : String, obj : Object, params : Params) -> Array:

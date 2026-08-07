@@ -21,8 +21,8 @@ func get_view_rule_label(params : Variant) -> String:
 func generate_view_object_members(object_type : String, obj : Object, params : Variant) -> Array:
 	var members := [];
 	
-	var used_methods := SignalGraphEditor.Utility.get_connected_method_names(obj);
-	var used_signals := SignalGraphEditor.Utility.get_connected_signal_names(obj);
+	var used_methods := get_connected_method_names(obj);
+	var used_signals := get_connected_signal_names(obj);
 	
 	for method_name in used_methods:
 		members.append({
@@ -36,3 +36,43 @@ func generate_view_object_members(object_type : String, obj : Object, params : V
 		});
 	
 	return members;
+
+static func get_connected_method_names(obj : Object) -> Array:
+	var list := [];
+	
+	var connected_methods : Array[StringName] = [];
+	for connection in obj.get_incoming_connections():
+		if(connection.flags & CONNECT_PERSIST) == 0: continue;
+		var method_name := connection.callable.get_method() as StringName; 
+		if !connected_methods.has(method_name):
+			connected_methods.push_back(method_name);
+	
+	# doing two passes because we want the returned list to be in a consistent order (by method definition)
+	# rather than the order of connections :(
+	
+	for method_info in obj.get_method_list():
+		var method_name := method_info["name"] as StringName;
+		if list.has(method_name): continue;
+		var used := connected_methods.has(method_name);
+		
+		if used: list.append(method_name);
+	
+	return list;
+
+static func get_connected_signal_names(obj : Object) -> Array:
+	var list := [];
+	for signal_info in obj.get_signal_list():
+		var signal_name := signal_info["name"] as StringName;
+		var used := false;
+		
+		for connection in obj.get_signal_connection_list(signal_name):
+			var flags := connection["flags"] as ConnectFlags;
+			if (flags & ConnectFlags.CONNECT_PERSIST) != 0:
+				used = true;
+				break;
+		
+		if !used: continue;
+		
+		list.append(signal_name);
+	
+	return list;

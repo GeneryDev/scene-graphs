@@ -14,7 +14,7 @@ var scene_objects : Dictionary = {};
 #	"view_rules": {
 #		"object_source": [
 #			{
-#				"id": "scene_signals:nodes_with_connections",
+#				"id": "scene_signals:nodes",
 #				"params": {}
 #			}
 #		],
@@ -204,6 +204,7 @@ func get_view_rule_hook(id : String, type : String) -> Object:
 	return null;
 
 func rule_params_from_dict(hook : Object, raw_params : Dictionary) -> Variant:
+	if !hook: return null;
 	if !hook.has_method(&"create_view_rule_params"): return null;
 	var params : Object = hook.create_view_rule_params();
 	
@@ -233,28 +234,40 @@ func get_view_rules_of_type(rule_type : String) -> Array:
 	return view_rules.get_or_add(rule_type, {});
 
 func update_object_views_with_rules() -> void:
+	var objects := generate_object_list_with_rules();
+	for entry in objects:
+		var object_type : String = entry.object_type;
+		var object : Object = entry.object;
+		add_object_view(object_type, object);
+
+func generate_object_list_with_rules() -> Array:
+	var generated_objects := [];
 	for rule_entry in get_view_rules_of_type("object_source"):
 		var id : String = rule_entry.id;
 		var raw_params : Dictionary = rule_entry.get("params");
 		var rule_hook := get_view_rule_hook(id, "object_source");
 		if !rule_hook: continue;
 		var objects : Array = rule_hook.generate_view_objects(rule_params_from_dict(rule_hook, raw_params));
-		for entry in objects:
-			var object_type : String = entry.object_type;
-			var object : Object = entry.object;
-			add_object_view(object_type, object);
+		generated_objects.append_array(objects);
+	return generated_objects;
 
 func update_object_member_views_with_rules(object_type : String, obj : Object) -> void:
+	var members := generate_object_member_list_with_rules(object_type, obj);
+	for member in members:
+		var member_type : String = member.member_type;
+		var member_name : StringName = member.member_name;
+		add_object_view_member(object_type, obj, member_type, member_name);
+
+func generate_object_member_list_with_rules(object_type : String, obj : Object) -> Array:
+	var generated_members := [];
 	for rule_entry in get_view_rules_of_type("member_source"):
 		var id : String = rule_entry.id;
 		var raw_params : Dictionary = rule_entry.get("params");
 		var rule_hook := get_view_rule_hook(id, "member_source");
 		if !rule_hook: continue;
 		var members : Array = rule_hook.generate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
-		for member in members:
-			var member_type : String = member.member_type;
-			var member_name : StringName = member.member_name;
-			add_object_view_member(object_type, obj, member_type, member_name);
+		generated_members.append_array(members);
+	return generated_members;
 
 func update_all_object_member_views_with_rules() -> void:
 	for object_type in get_all_scene_object_views():

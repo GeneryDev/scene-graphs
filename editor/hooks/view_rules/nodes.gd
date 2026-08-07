@@ -13,20 +13,20 @@ func get_signal_graph_capabilities() -> Array[String]:
 	return ["view_rule.object_source"];
 
 func get_view_rule_id() -> String:
-	return "scene_signals:nodes_with_connections";
+	return "scene_signals:nodes";
 
 func get_view_rule_label(params : Params) -> String:
 	if params == null:
-		return "Nodes with connections";
+		return "Nodes";
 	var label := "";
 	if params && params.sub_paths:
-		if params.require_connections:
-			label += "Connected nodes with path: ";
-		else:
+		if params.require_shown_members:
 			label += "Nodes with path: ";
+		else:
+			label += "All nodes with path: ";
 		label += ", ".join(params.sub_paths);
-	elif params.require_connections:
-		label = "Nodes with connected methods/signals"
+	elif params.require_shown_members:
+		label = "Nodes"
 	else:
 		label = "All Nodes"
 	return label;
@@ -68,16 +68,16 @@ func _should_include_node(node : Node, params : Params) -> bool:
 		var path := str(editor.scene_root.get_path_to(node)) if node != editor.scene_root else str(node.name);
 		
 		for subpath in params.sub_paths:
+			if subpath.is_empty(): continue;
 			if path.containsn(subpath):
 				has_subpath = true;
 				break;
 		
 		if !has_subpath: return false;
 	
-	if params.require_connections:
-		var used_methods := SignalGraphEditor.Utility.get_connected_method_names(node);
-		var used_signals := SignalGraphEditor.Utility.get_connected_signal_names(node);
-		if !used_methods && !used_signals: return false;
+	if params.require_shown_members:
+		var members := editor.current_view.generate_object_member_list_with_rules(OBJECT_TYPE_NODE, node);
+		if members.is_empty(): return false;
 	
 	return true;
 
@@ -86,4 +86,8 @@ func create_view_rule_params() -> Object:
 
 class Params extends RefCounted:
 	@export var sub_paths : Array[String];
-	@export var require_connections : bool = true;
+	@export var require_connections : bool = true;			&"sub_paths":
+				return "If non-empty, restricts the added nodes to only those\nwhose node path contains at least one of the substrings listed in this array.\nFor example, if sub_paths is [&\"Area\", &\"Zone\"], only nodes with \"Area\" or \"Zone\" in their path\n(either their name, or one of their ancestors' names) will be added.\nThis search is case-insensitive.";
+			&"require_shown_members":
+				return "If checked, this rule will use rules under 'Member Sources'\nto determine whether a node should be added, requiring at least one member.\nIn other words, this excludes nodes which would otherwise show up empty\non the graph (i.e. with no connections or members).";
+		return "";
