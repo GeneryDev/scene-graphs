@@ -253,6 +253,11 @@ func _on_connections_draw() -> void:
 
 func _on_connections_changed() -> void:
 	_refresh_connection_elements();
+	
+	for child : Node in editor.get_children():
+		if !is_instance_of(child, ObjectSignalsNode):
+			continue;
+		child.update_connection_cache();
 
 func _on_visibility_changed() -> void:
 	if editor.is_visible_in_tree():

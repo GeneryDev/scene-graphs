@@ -14,6 +14,7 @@ var _signal_slots : Dictionary[StringName, int];
 
 var _collapsible_panel : Control;
 var _connections_not_in_view : Array = [];
+var _last_built_view : Dictionary = {};
 
 func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 	self.editor = editor;
@@ -50,38 +51,32 @@ func get_object() -> Object:
 	return instance_from_id(obj_instance_id) as Object;
 
 func _enter_tree() -> void:
-	editor.connections_changed.connect(_update_connection_cache);
-	_update_connection_cache();
-func _exit_tree() -> void:
-	editor.connections_changed.disconnect(_update_connection_cache);
+	update_connection_cache();
 
-func _update_connection_cache() -> void:
+func update_connection_cache() -> void:
 	_connections_not_in_view.clear();
 	var obj := get_object();
 
 	var incoming_connections := obj.get_incoming_connections();
 	var seen_method_names : Array = [];
 	
-	for method_info in obj.get_method_list():
-		var method_name := method_info["name"] as StringName;
+	for method_connection in incoming_connections:
+		if(method_connection.flags & CONNECT_PERSIST) == 0: continue;
+		var method_name := method_connection.callable.get_method() as StringName;
+		if !editor.current_view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD, method_name): continue;
 		if seen_method_names.has(method_name): continue;
 		seen_method_names.append(method_name);
-		if !editor.current_view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD, method_name): continue;
-		
-		for method_connection in incoming_connections:
-			if(method_connection.flags & CONNECT_PERSIST) == 0: continue;
-			if method_connection.callable.get_method() as StringName != method_name: continue;
-			var sgnal : Signal = method_connection.signal;
-			var source : Object = sgnal.get_object();
-			if source is Node && !(editor.scene_root != null && (source == editor.scene_root || editor.scene_root.is_ancestor_of(source))):
-				# connected to orphan node, skip;
-				continue;
-			if !editor.current_view.has_object_view(OBJECT_TYPE_NODE, source):
-				_connections_not_in_view.append({
-					"port_type": editor.port_type(&"method"),
-					"member_name": method_name,
-					"other_instance_id": source.get_instance_id()
-				});
+		var sgnal : Signal = method_connection.signal;
+		var source : Object = sgnal.get_object();
+		if source is Node && !(editor.scene_root != null && (source == editor.scene_root || editor.scene_root.is_ancestor_of(source))):
+			# connected to orphan node, skip;
+			continue;
+		if !editor.current_view.has_object_view(OBJECT_TYPE_NODE, source):
+			_connections_not_in_view.append({
+				"port_type": editor.port_type(&"method"),
+				"member_name": method_name,
+				"other_instance_id": source.get_instance_id()
+			});
 	
 	for signal_info in obj.get_signal_list():
 		var signal_name := signal_info["name"] as StringName;
@@ -102,7 +97,9 @@ func update_from_view() -> void:
 	var obj := get_object();
 	var obj_view := editor.current_view.get_object_view(OBJECT_TYPE_NODE, obj);
 	
-	rebuild_contents_from_view();
+	if _last_built_view != obj_view:
+		_last_built_view = obj_view.duplicate(true);
+		rebuild_contents_from_view();
 	
 	if obj_view.has("position_offset"):
 		position_offset = obj_view["position_offset"] as Vector2;
