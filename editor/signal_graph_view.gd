@@ -34,7 +34,17 @@ func _init(editor : SignalGraphEditor):
 	self.editor = editor;
 	transactions = Transactions.new(editor, self);
 
-func notify_view_updated() -> void:
+var _update_signal_queued := false;
+
+func notify_view_updated(throttled : bool = true) -> void:
+	if throttled:
+		if _update_signal_queued:
+			return;
+		else:
+			call_deferred(&"notify_view_updated", false);
+			_update_signal_queued = true;
+			return;
+	_update_signal_queued = false;
 	view_updated.emit();
 
 func get_all_scene_object_views() -> Dictionary:

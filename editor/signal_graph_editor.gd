@@ -116,8 +116,19 @@ func register_port_type(name : StringName) -> int:
 	_next_port_type_idx += 1;
 	_port_types_by_name[name] = idx;
 	return idx;
+	
+var _selection_change_queued := false;
 
-func notify_selection_changed() -> void:
+func notify_selection_changed(throttled : bool = true) -> void:
+	if throttled:
+		if _selection_change_queued:
+			return;
+		else:
+			call_deferred(&"notify_selection_changed", false);
+			_selection_change_queued = true;
+			return;
+	_selection_change_queued = false;
+	
 	var only_script : Script = null;
 	var only_script_nodes : Array[Node];
 	var script_set := false;
