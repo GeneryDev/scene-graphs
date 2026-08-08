@@ -55,7 +55,7 @@ func _ready() -> void:
 	if is_part_of_edited_scene():
 		return;
 	hooks._initialize_hooks();
-	interface_signals.subscribe();
+	interface_signals.connect_all();
 	for hook in hooks.configure_port_types:
 		hook.configure_port_types();
 
@@ -778,7 +778,7 @@ class InterfaceSignals extends RefCounted:
 	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 
-	func subscribe() -> void:
+	func connect_all() -> void:
 		editor.popup_request.connect(_on_popup_request);
 		editor.node_selected.connect(_on_node_selected);
 		editor.node_deselected.connect(_on_node_deselected);
@@ -809,10 +809,13 @@ class InterfaceSignals extends RefCounted:
 	func _on_node_deselected(node : Node) -> void:
 		_deselect_node(node);
 	func _deselect_node(node : Node) -> void:
+		var changed := false;
 		for i in range(editor.selected_nodes.size()-1, -1, -1):
 			if editor.selected_nodes[i] == node.name:
+				changed = true;
 				editor.selected_nodes.remove_at(i);
-		editor.notify_selection_changed();
+		if changed:
+			editor.notify_selection_changed();
 	func _on_begin_node_move() -> void:
 		editor.dragging = true;
 		_dragging_across_frames = Input.is_key_pressed(Key.KEY_SHIFT);

@@ -38,26 +38,17 @@ func generate_view_object_members(object_type : String, obj : Object, params : V
 	return members;
 
 static func get_connected_method_names(obj : Object) -> Array:
-	var list := [];
-	
-	var connected_methods : Array[StringName] = [];
+	var connected_methods : Array = [];
 	for connection in obj.get_incoming_connections():
 		if(connection.flags & CONNECT_PERSIST) == 0: continue;
 		var method_name := connection.callable.get_method() as StringName; 
 		if !connected_methods.has(method_name):
 			connected_methods.push_back(method_name);
+			
+	# TODO I'd like the returned methods to be in a consistent order, preferably in the order returned by get_method_list.
+	# However, that method appears to be super expensive, so I'd rather not use it in this function.
 	
-	# doing two passes because we want the returned list to be in a consistent order (by method definition)
-	# rather than the order of connections :(
-	
-	for method_info in obj.get_method_list():
-		var method_name := method_info["name"] as StringName;
-		if list.has(method_name): continue;
-		var used := connected_methods.has(method_name);
-		
-		if used: list.append(method_name);
-	
-	return list;
+	return connected_methods;
 
 static func get_connected_signal_names(obj : Object) -> Array:
 	var list := [];

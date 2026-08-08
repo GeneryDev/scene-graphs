@@ -167,6 +167,9 @@ func add_signal_ports(obj : Object) -> bool:
 	var left_port_index := 0;
 	for signal_name in editor.current_view.get_object_view_members(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_SIGNAL):
 		var signal_info := get_signal_info_by_name(obj, signal_name);
+		if !signal_info:
+			print("No signal found for name '" + signal_name + "' in object " + str(obj));
+			continue;
 		
 		var row_control := _create_row("", signal_name, SignalGraphEditor.ICON_NAME_SIGNAL);
 		row_control.tooltip_text = "Signal: " + SignalGraphEditor.Utility.get_method_signature_text(signal_info);
@@ -199,6 +202,9 @@ func add_method_ports(obj : Object) -> bool:
 		var method_info := get_method_info_by_name(obj, method_name);
 		if _method_ports.has(method_name):
 			continue; # skip method overloads
+		if !method_info:
+			print("No method found for name '" + method_name + "' in object " + str(obj));
+			continue;
 		
 		var row_control := _create_row(SignalGraphEditor.ICON_NAME_METHOD, method_name, "");
 		row_control.tooltip_text = "Method: " + SignalGraphEditor.Utility.get_method_signature_text(method_info);
