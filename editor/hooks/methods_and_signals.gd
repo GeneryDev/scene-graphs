@@ -210,9 +210,39 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 	func create_object_graph_node_slots() -> Array[Dictionary]:
 		var created : Array[Dictionary] = [];
 		
+		var method_cells := create_method_cells();
+		var signal_cells := create_signal_cells();
+		var row_count = max(method_cells.size(), signal_cells.size());
+		var col_count := int(!method_cells.is_empty()) + int(!signal_cells.is_empty());
+		for row_index in range(row_count):
+			var row_control := EqualDistributionHBoxContainer.new();
+			row_control.add_theme_constant_override("separation",16);
+			var method_cell : Dictionary = method_cells[row_index] if row_index < method_cells.size() else {};
+			var signal_cell : Dictionary = signal_cells[row_index] if row_index < signal_cells.size() else {};
+			
+			var slot := {
+				"control": row_control,
+				"sort_key": 1
+			};
+			
+			if method_cell:
+				method_cell.control.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+				row_control.add_child(method_cell.control);
+				slot.left_port = method_cell.left_port;
+			elif col_count > 1:
+				var padding_control := Control.new();
+				padding_control.mouse_filter = Control.MOUSE_FILTER_IGNORE;
+				padding_control.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+				row_control.add_child(padding_control);
+			
+			if signal_cell:
+				signal_cell.control.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+				row_control.add_child(signal_cell.control);
+				slot.right_port = signal_cell.right_port;
+			
+			created.append(slot);
+		
 		created.append(create_collapsible_panel());
-		create_method_slots(created);
-		create_signal_slots(created);
 		
 		return created;
 	
@@ -228,7 +258,8 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			return method_info;
 		return {};
 	
-	func create_method_slots(created : Array[Dictionary]) -> void:
+	func create_method_cells() -> Array[Dictionary]:
+		var created : Array[Dictionary] = [];
 		var obj : Object = graph_node.get_object();
 		var seen_method_names : Array[StringName] = [];
 		for method_name in editor.current_view.get_object_view_members(graph_node.object_type, obj, MEMBER_TYPE_METHOD):
@@ -240,11 +271,11 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 				continue;
 			seen_method_names.append(method_name);
 			
-			var row_control := _create_row(SignalGraphEditor.ICON_NAME_METHOD, method_name, "");
-			row_control.tooltip_text = "Method: " + SignalGraphEditor.Utility.get_method_signature_text(method_info);
+			var cell_control := _create_cell(method_name, SignalGraphEditor.ICON_NAME_METHOD, HORIZONTAL_ALIGNMENT_LEFT);
+			cell_control.tooltip_text = "Method: " + SignalGraphEditor.Utility.get_method_signature_text(method_info);
 			
 			created.append({
-				"control": row_control,
+				"control": cell_control,
 				"sort_key": 1,
 				"left_port": {
 					"port_type": editor.port_type(&"method"),
@@ -255,8 +286,10 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 					}
 				}
 			});
+		return created;
 	
-	func create_signal_slots(created : Array[Dictionary]) -> void:
+	func create_signal_cells() -> Array[Dictionary]:
+		var created : Array[Dictionary] = [];
 		var obj : Object = graph_node.get_object();
 		for signal_name in editor.current_view.get_object_view_members(graph_node.object_type, obj, MEMBER_TYPE_SIGNAL):
 			var signal_info := get_signal_info_by_name(obj, signal_name);
@@ -264,11 +297,11 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 				print("No signal found for name '" + signal_name + "' in object " + str(obj));
 				continue;
 			
-			var row_control := _create_row("", signal_name, SignalGraphEditor.ICON_NAME_SIGNAL);
-			row_control.tooltip_text = "Signal: " + SignalGraphEditor.Utility.get_method_signature_text(signal_info);
+			var cell_control := _create_cell(signal_name, SignalGraphEditor.ICON_NAME_SIGNAL, HORIZONTAL_ALIGNMENT_RIGHT);
+			cell_control.tooltip_text = "Signal: " + SignalGraphEditor.Utility.get_method_signature_text(signal_info);
 			
 			created.append({
-				"control": row_control,
+				"control": cell_control,
 				"sort_key": 1,
 				"right_port": {
 					"port_type": editor.port_type(&"signal"),
@@ -279,26 +312,23 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 					}
 				}
 			});
+		return created;
 
-	func _create_row(icon_left : String, text : String, icon_right : String) -> Control:
+	func _create_cell(text : String, icon : String, alignment : HorizontalAlignment) -> Control:
 		var label := Label.new();
 		label.text = text;
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+		label.horizontal_alignment = alignment;
 		var height := label.get_minimum_size().y;
 		
-		var icon_rect_left := _create_icon_control(icon_left, int(height));
-		var icon_rect_right := _create_icon_control(icon_right, int(height));
-		var max_minimum_size := Vector2(
-			max(icon_rect_left.get_minimum_size().x, icon_rect_right.get_minimum_size().x),
-			max(icon_rect_left.get_minimum_size().y, icon_rect_right.get_minimum_size().y)
-		);
-		icon_rect_left.custom_minimum_size = max_minimum_size;
-		icon_rect_right.custom_minimum_size = max_minimum_size;
+		var icon_rect := _create_icon_control(icon, int(height));
 		
 		var container := HBoxContainer.new();
-		container.add_child(icon_rect_left);
+		if alignment == HORIZONTAL_ALIGNMENT_LEFT:
+			container.add_child(icon_rect);
 		container.add_child(label);
-		container.add_child(icon_rect_right);
+		if alignment == HORIZONTAL_ALIGNMENT_RIGHT:
+			container.add_child(icon_rect);
 		return container;
 	
 	func _create_icon_control(icon_name : String, height : int) -> Control:
@@ -399,3 +429,86 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 					});
 		
 		graph_node.queue_redraw();
+
+# HBoxContainer designed to be used inside a VBoxContainer when you need to transpose the layout orientation,
+# so that it behaves like a VBoxContainer inside a HBoxContainer parent.
+# When multiple of these are placed inside the same container, each child index (column) will inherit the maximum width
+# of the same child index across all siblings.
+class EqualDistributionHBoxContainer extends Container:
+	var gap : int = 4;
+	var _last_computed_minimum_size : Vector2;
+	var _last_computed_child_widths : Array[float];
+	var _last_computed_total_child_width : float;
+
+	func _get_minimum_size() -> Vector2:
+		if !get_parent(): return _last_computed_minimum_size;
+		var new_minimum_size := _compute_minimum_size();
+		if new_minimum_size != _last_computed_minimum_size:
+			_last_computed_minimum_size = new_minimum_size;
+			update_minimum_size();
+		return new_minimum_size;
+	
+	func _compute_minimum_size() -> Vector2:
+		if !get_parent(): return _last_computed_minimum_size;
+		var max_child_widths := _last_computed_child_widths;
+		var max_child_height := 0;
+		max_child_widths.clear();
+		var siblings := get_parent().get_children().filter(is_same_class);
+		var is_first_sibling := true;
+		for sibling : EqualDistributionHBoxContainer in siblings:
+			if is_first_sibling && sibling != self:
+				# skip all the expensive computations if the first sibling has already done them.
+				_last_computed_child_widths = sibling._last_computed_child_widths.duplicate();
+				_last_computed_total_child_width = sibling._last_computed_total_child_width;
+				return sibling._last_computed_minimum_size;
+			var child_controls := sibling.get_children().filter(_is_control);
+			for child_index in range(child_controls.size()):
+				if max_child_widths.size() <= child_index: max_child_widths.append(0);
+				var child_min_size := (child_controls[child_index] as Control).get_combined_minimum_size();
+				max_child_height = max(child_min_size.y, max_child_height);
+				max_child_widths[child_index] = max(max_child_widths[child_index], child_min_size.x);
+			is_first_sibling = false;
+		
+		var total_max_width := 0.0;
+		var total_child_width := 0.0;
+		for child_index in range(max_child_widths.size()):
+			total_max_width += max_child_widths[child_index];
+			total_child_width += max_child_widths[child_index];
+			if child_index > 0: total_max_width += gap;
+		
+		_last_computed_total_child_width = total_child_width;
+		return Vector2(total_max_width, max_child_height);
+	
+	func _is_control(node : Node) -> bool:
+		return node is Control; 
+	
+	func is_same_class(node : Node) -> bool:
+		return node is EqualDistributionHBoxContainer; 
+		
+	func _sort_children() -> void:
+		var children := get_children().filter(_is_control);
+		
+		if children.is_empty(): return;
+		var child_count := children.size();
+		
+		var current_pos := Vector2.ZERO;
+		var child_index := 0;
+		var container_size := size;
+		for child : Control in children:
+			if child_index >= _last_computed_child_widths.size():
+				# how???
+				break;
+			var child_size := Vector2(
+				(_last_computed_child_widths[child_index] / _last_computed_total_child_width) * (container_size.x - gap * (child_count - 1)),
+				container_size.y
+			);
+			child.position = current_pos;
+			child.size = child_size;
+			current_pos.x += child_size.x + gap;
+			
+			child_index += 1;
+				
+	func _notification(what):
+		match what:
+			NOTIFICATION_SORT_CHILDREN:
+				_sort_children();
