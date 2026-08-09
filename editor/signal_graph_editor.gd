@@ -19,7 +19,6 @@ var dragging : bool = false;
 var interface_signals : InterfaceSignals;
 var transactions : Transactions;
 var utility : Utility;
-var frames : Frames;
 var hooks : Hooks;
 
 var current_view : SignalGraphView:
@@ -44,7 +43,6 @@ func _init():
 	interface_signals = InterfaceSignals.new(self);
 	transactions = Transactions.new(self);
 	utility = Utility.new(self);
-	frames = Frames.new(self);
 	
 	connections_layer = get_node(^"_connection_layer");
 	hooks = Hooks.new(self);
@@ -755,26 +753,6 @@ class Transactions extends RefCounted:
 		if create_and_commit:
 			end_transaction();
 	
-	func attach_to_frame(node_name : StringName, frame_name : StringName, create_and_commit : bool = true):
-		var prev_frame := editor.get_element_frame(node_name)
-		var prev_frame_name : StringName = prev_frame.name if prev_frame != null else &"";
-	
-		if create_and_commit:
-			begin_transaction("Add graph nodes to frame", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		
-		if prev_frame_name:
-			undo_redo.add_do_method(editor, &"detach_graph_element_from_frame", node_name);
-		if frame_name:
-			undo_redo.add_do_method(editor, &"attach_graph_element_to_frame", node_name, frame_name);
-		
-		if prev_frame_name:
-			undo_redo.add_undo_method(editor, &"attach_graph_element_to_frame", node_name, prev_frame_name);
-		if frame_name:
-			undo_redo.add_undo_method(editor, &"detach_graph_element_to_frame", node_name);
-		
-		if create_and_commit:
-			end_transaction();
-	
 	func connect_signal(from_node : Node, signal_name : StringName, callable : Callable, flags : ConnectFlags = ConnectFlags.CONNECT_PERSIST, create_and_commit : bool = true):
 		if create_and_commit:
 			begin_transaction("Connect signal", UndoRedo.MergeMode.MERGE_ALL, null, true);
@@ -803,8 +781,6 @@ class Transactions extends RefCounted:
 class InterfaceSignals extends RefCounted:
 	var editor : SignalGraphEditor;
 	
-	var _dragging_across_frames := false;
-	
 	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 
@@ -820,9 +796,7 @@ class InterfaceSignals extends RefCounted:
 	
 	func _on_popup_request(at_position : Vector2) -> void:
 		var menu := PopupMenu.new();
-		menu.add_item("New Frame");
-		menu.add_item("New: One Shot");
-		menu.add_item("four");
+		menu.add_item("Menu WIP");
 		editor.add_child(menu);
 		menu.position = editor.get_screen_position() + at_position;
 		
@@ -848,24 +822,10 @@ class InterfaceSignals extends RefCounted:
 			editor.notify_selection_changed();
 	func _on_begin_node_move() -> void:
 		editor.dragging = true;
-		_dragging_across_frames = Input.is_key_pressed(Key.KEY_SHIFT);
-		if _dragging_across_frames:
-			for node_name in editor.selected_nodes:
-				editor.detach_graph_element_from_frame(node_name);
 		
 	func _on_end_node_move() -> void:
 		editor.dragging = false;
-		_dragging_across_frames = Input.is_key_pressed(Key.KEY_SHIFT);
-		if _dragging_across_frames:
-			var mouse_pos := editor.get_local_mouse_position();
-			var hovered_frame : GraphFrame = null;
-			for child in editor.get_children():
-				if child is GraphFrame && !editor.selected_nodes.has(child.name) && (child as GraphFrame).get_rect().has_point(mouse_pos):
-					hovered_frame = child;
-			
-			for node_name in editor.selected_nodes:
-				editor.transactions.attach_to_frame(node_name, hovered_frame.name if hovered_frame else &"");
-				
+	
 	func _on_node_removed(node : Node) -> void:
 		_deselect_node(node);
 		
@@ -877,60 +837,3 @@ class InterfaceSignals extends RefCounted:
 		if !editor.current_view: return;
 		editor.current_view.scene_data.scroll_offset = editor.scroll_offset;
 		editor.current_view.scene_data.zoom = editor.zoom;
-
-### FRAMES
-class Frames extends RefCounted:
-	var editor : SignalGraphEditor;
-	
-	func _init(editor : SignalGraphEditor):
-		self.editor = editor;
-	
-	func add_frame(group_selected : bool = true):
-		editor.transactions.begin_transaction("Add frame", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		var frame := GraphFrame.new();
-		frame.title = "New Frame";
-		editor.transactions.add_child(frame, true, true);
-		editor.transactions.end_transaction();
-		
-		if !group_selected || editor.selected_nodes.is_empty():
-			return;
-		
-		editor.transactions.begin_transaction("Add frame", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		var common_ancestor : Node = null;
-		var common_ancestor_set := false;
-		var common_frame_name : StringName;
-		var common_frame_name_set := false;
-		for node_name in editor.selected_nodes:	
-			# Take old node frame, try to find a common frame
-			if !common_frame_name && !common_frame_name_set:
-				var common_frame := editor.get_element_frame(node_name);
-				common_frame_name = common_frame.name if common_frame else &"";
-				common_frame_name_set = true;
-			else:
-				var common_frame := editor.get_element_frame(node_name);
-				if common_frame_name != (common_frame.name if common_frame else &""):
-					common_frame_name = &"";
-			
-			# Attach selected nodes to new frame
-				
-			editor.transactions.attach_to_frame(node_name, frame.name, false);
-			
-			var graph_node : GraphNode = editor.get_node(NodePath(node_name)) as GraphNode;
-			if !graph_node.has_method(&"get_object"): continue;
-			var node : Object = graph_node.get_object();
-			if node is not Node: continue;
-			
-			# Look for a common ancestor among all the selected graph nodes' nodes.
-			if !common_ancestor && !common_ancestor_set:
-				common_ancestor = node as Node;
-				common_ancestor_set = true;
-			else:
-				common_ancestor = editor.utility.get_common_ancestor(common_ancestor, node);
-		
-		if common_ancestor:
-			frame.title = common_ancestor.name;
-		
-		if common_frame_name:
-			editor.transactions.attach_to_frame(frame.name, common_frame_name, false);
-			
-		editor.transactions.end_transaction();
