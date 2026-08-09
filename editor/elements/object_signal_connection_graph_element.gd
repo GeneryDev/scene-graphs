@@ -6,6 +6,9 @@ static var ICON_ARGUMENTS : Texture2D = preload("res://addons/signal-graphs/icon
 const INTERACTION_RADIUS := 16;
 const VISUAL_RADIUS := 8;
 
+const MEMBER_TYPE_METHOD := "methods";
+const MEMBER_TYPE_SIGNAL := "signals";
+
 var editor : SignalGraphEditor;
 var graph_connection : Dictionary;
 var bg_color := Color.BLACK;
@@ -88,8 +91,8 @@ func update_connection_info() -> void:
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
-	var signal_name : StringName = from_graph_node.get_signal_port_name(graph_connection.from_port);
-	var method_name : StringName = to_graph_node.get_method_port_name(graph_connection.to_port);
+	var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, graph_connection.from_port).member_name;
+	var method_name : StringName = to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, graph_connection.to_port).member_name;
 	
 	var signal_connection : Dictionary;
 	for signal_connection_candidate in from_object.get_signal_connection_list(signal_name):

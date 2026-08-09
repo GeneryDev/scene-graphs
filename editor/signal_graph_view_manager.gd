@@ -282,13 +282,13 @@ func create_default_view() -> Dictionary:
 		"view_rules": {
 			"object_source": [
 				{
-					"id": "scene_signals:nodes",
+					"id": "signal_graphs:nodes",
 					"params": {}
 				}
 			],
 			"member_source": [
 				{
-					"id": "scene_signals:members_with_connections",
+					"id": "signal_graphs:members_with_connections",
 					"params": {}
 				}
 			]

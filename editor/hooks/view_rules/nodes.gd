@@ -13,7 +13,7 @@ func get_signal_graph_capabilities() -> Array[String]:
 	return ["view_rule.object_source"];
 
 func get_view_rule_id() -> String:
-	return "scene_signals:nodes";
+	return "signal_graphs:nodes";
 
 func get_view_rule_label(params : Params) -> String:
 	if params == null:

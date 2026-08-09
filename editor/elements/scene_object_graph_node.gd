@@ -1,16 +1,15 @@
 ﻿extends GraphNode
 
 const OBJECT_TYPE_NODE := "node";
+const OBJECT_TYPE_OTHER := "other"; # temporary placeholder for non-node object types
 const MEMBER_TYPE_METHOD := "methods";
 const MEMBER_TYPE_SIGNAL := "signals";
 
-var obj_instance_id : int;
+var object_type : String;
+var obj : Object;
 
 var editor : SignalGraphEditor;
-var _method_ports : Dictionary[StringName, int];
-var _signal_ports : Dictionary[StringName, int];
-var _method_slots : Dictionary[StringName, int];
-var _signal_slots : Dictionary[StringName, int];
+var _member_cache : Dictionary = {};
 
 var _collapsible_panel : Control;
 var _connections_not_in_view : Array = [];
@@ -18,8 +17,9 @@ var _last_built_view : Dictionary = {};
 
 func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 	self.editor = editor;
+	self.object_type = object_type;
+	self.obj = obj;
 	
-	obj_instance_id = obj.get_instance_id();
 	title = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 	
 	var icon := SignalGraphEditor.Utility.get_object_icon(obj);
@@ -31,10 +31,7 @@ func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 		get_titlebar_hbox().move_child(icon_rect, 0);
 		get_titlebar_hbox().add_theme_constant_override("separation", 8);
 	
-	_signal_ports = {};
-	_method_ports = {};
-	_signal_slots = {};
-	_method_slots = {};
+	_member_cache.clear();
 	
 	# Create collapsible panel
 	_collapsible_panel = VBoxContainer.new();
@@ -48,7 +45,7 @@ func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 	node_deselected.connect(_on_node_deselected);
 
 func get_object() -> Object:
-	return instance_from_id(obj_instance_id) as Object;
+	return obj;
 
 func _enter_tree() -> void:
 	update_connection_cache();
@@ -63,7 +60,7 @@ func update_connection_cache() -> void:
 	for method_connection in incoming_connections:
 		if(method_connection.flags & CONNECT_PERSIST) == 0: continue;
 		var method_name := method_connection.callable.get_method() as StringName;
-		if !editor.current_view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD, method_name): continue;
+		if !editor.current_view.has_object_view_member(object_type, obj, MEMBER_TYPE_METHOD, method_name): continue;
 		if seen_method_names.has(method_name): continue;
 		seen_method_names.append(method_name);
 		var sgnal : Signal = method_connection.signal;
@@ -71,7 +68,7 @@ func update_connection_cache() -> void:
 		if source is Node && !(editor.scene_root != null && (source == editor.scene_root || editor.scene_root.is_ancestor_of(source))):
 			# connected to orphan node, skip;
 			continue;
-		if !editor.current_view.has_object_view(OBJECT_TYPE_NODE, source):
+		if !editor.current_view.has_object_view(OBJECT_TYPE_NODE if source is Node else OBJECT_TYPE_OTHER, source):
 			_connections_not_in_view.append({
 				"port_type": editor.port_type(&"method"),
 				"member_name": method_name,
@@ -80,24 +77,26 @@ func update_connection_cache() -> void:
 	
 	for signal_info in obj.get_signal_list():
 		var signal_name := signal_info["name"] as StringName;
-		if !editor.current_view.has_object_view_member(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_SIGNAL, signal_name): continue;
+		if !editor.current_view.has_object_view_member(object_type, obj, MEMBER_TYPE_SIGNAL, signal_name): continue;
 		
 		for signal_connection in obj.get_signal_connection_list(signal_name):
 			if(signal_connection.flags & CONNECT_PERSIST) == 0: continue;
 			var callable : Callable = signal_connection.callable;
 			var target : Object = callable.get_object();
-			if !editor.current_view.has_object_view(OBJECT_TYPE_NODE, target):
+			if !editor.current_view.has_object_view(OBJECT_TYPE_NODE if target is Node else OBJECT_TYPE_OTHER, target):
 				_connections_not_in_view.append({
 					"port_type": editor.port_type(&"signal"),
 					"member_name": signal_name,
 					"other_instance_id": target.get_instance_id()
 				});
+	
+	queue_redraw();
 
 func update_from_view() -> void:
 	var obj := get_object();
-	var obj_view := editor.current_view.get_object_view(OBJECT_TYPE_NODE, obj);
+	var obj_view := editor.current_view.get_object_view(object_type, obj);
 	
-	if _last_built_view != obj_view:
+	if !_last_built_view.recursive_equal(obj_view, 3):
 		_last_built_view = obj_view.duplicate(true);
 		rebuild_contents_from_view();
 	
@@ -106,13 +105,14 @@ func update_from_view() -> void:
 	
 func update_view() -> void:
 	var obj := get_object();
-	var obj_view := editor.current_view.get_object_view(OBJECT_TYPE_NODE, obj);
+	var obj_view := editor.current_view.get_object_view(object_type, obj);
 	if !obj_view: return;
 	
 	obj_view["position_offset"] = position_offset;
 	
 func rebuild_contents_from_view() -> bool:
 	clear_all_slots();
+	_member_cache.clear();
 	for child in get_children():
 		remove_child(child)
 		if child != _collapsible_panel:
@@ -126,9 +126,9 @@ func create_and_add_contents() -> bool:
 	if _collapsible_panel != null && self.is_ancestor_of(_collapsible_panel):
 		remove_child(_collapsible_panel);
 	
-	if add_signal_ports(obj):
-		any_ports = true;
 	if add_method_ports(obj):
+		any_ports = true;
+	if add_signal_ports(obj):
 		any_ports = true;
 	
 	_add_collapsible_panel();
@@ -158,12 +158,24 @@ func get_method_info_by_name(obj : Object, method_name : StringName) -> Dictiona
 		return method_info;
 	return {};
 
+func _add_member_to_cache(member_type : String, member_name : StringName, slot_id : int, port_id : int) -> void:
+	_member_cache.get_or_add(member_type, {})[member_name] = {
+		"member_type": member_type,
+		"member_name": member_name,
+		"slot_id": slot_id,
+		"port_id": port_id
+	};
+
+func get_member_cache(member_type : String, member_name : StringName) -> Dictionary:
+	return _member_cache.get(member_type, {}).get(member_name, {});
+
 func add_signal_ports(obj : Object) -> bool:
 	var any_ports := false;
-	_signal_ports.clear();
 	var left_port_index := 0;
-	for signal_name in editor.current_view.get_object_view_members(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_SIGNAL):
+	for signal_name in editor.current_view.get_object_view_members(object_type, obj, MEMBER_TYPE_SIGNAL):
 		var signal_info := get_signal_info_by_name(obj, signal_name);
+		if get_member_cache(MEMBER_TYPE_SIGNAL, signal_name):
+			continue; # avoid duplicate ports
 		if !signal_info:
 			print("No signal found for name '" + signal_name + "' in object " + str(obj));
 			continue;
@@ -182,23 +194,22 @@ func add_signal_ports(obj : Object) -> bool:
 			editor.port_type(&"signal"),
 			Color(0xff786bff)
 		);
-		_signal_ports[signal_name] = left_port_index;
-		_signal_slots[signal_name] = slot_index;
+		_add_member_to_cache(MEMBER_TYPE_SIGNAL, signal_name, slot_index, left_port_index);
 		
 		left_port_index += 1;
 		any_ports = true;
+	
 	
 	return any_ports;
 
 func add_method_ports(obj : Object) -> bool:
 	var any_ports := false;
-	_method_ports.clear();
 	var right_port_index := 0;
 	
-	for method_name in editor.current_view.get_object_view_members(OBJECT_TYPE_NODE, obj, MEMBER_TYPE_METHOD):
+	for method_name in editor.current_view.get_object_view_members(object_type, obj, MEMBER_TYPE_METHOD):
 		var method_info := get_method_info_by_name(obj, method_name);
-		if _method_ports.has(method_name):
-			continue; # skip method overloads
+		if get_member_cache(MEMBER_TYPE_METHOD, method_name):
+			continue; # avoid duplicate ports, skip method overloads
 		if !method_info:
 			print("No method found for name '" + method_name + "' in object " + str(obj));
 			continue;
@@ -217,8 +228,7 @@ func add_method_ports(obj : Object) -> bool:
 			editor.port_type(&""),
 			Color.BLACK
 		);
-		_method_ports[method_name] = right_port_index;
-		_method_slots[method_name] = slot_index;
+		_add_member_to_cache(MEMBER_TYPE_METHOD, method_name, slot_index, right_port_index);
 		
 		right_port_index += 1;
 		any_ports = true;
@@ -272,43 +282,35 @@ func _on_node_deselected() -> void:
 	_collapsible_panel.visible = false;
 	reset_size();
 
-func get_signal_port_id(signal_name : StringName) -> int:
-	return _signal_ports[signal_name] if _signal_ports.has(signal_name) else -1;
+func get_member_port_id(member_type : String, member_name : StringName) -> int:
+	return get_member_cache(member_type, member_name).get("port_id", -1);
 
-func get_method_port_id(method_name : StringName) -> int:
-	return _method_ports[method_name] if _method_ports.has(method_name) else -1;
+func get_member_slot_id(member_type : String, member_name : StringName) -> int:
+	return get_member_cache(member_type, member_name).get("slot_id", -1);
 
-func get_signal_port_name(port_id : int) -> StringName:
-	for key in _signal_ports:
-		if _signal_ports[key] == port_id:
-			return key;
-	return &"";
+func get_member_from_port_id(member_type : String, port_id : int) -> Dictionary:
+	if !_member_cache.has(member_type): return {};
+	for member_name in _member_cache[member_type]:
+		var member : Dictionary = _member_cache[member_type][member_name];
+		if member["port_id"] == port_id:
+			return member;
+	return {};
 
-func get_method_port_name(port_id : int) -> StringName:
-	for key in _method_ports:
-		if _method_ports[key] == port_id:
-			return key;
-	return &"";
-
-func get_signal_slot_name(slot_index : int) -> StringName:
-	for key in _signal_slots:
-		if _signal_slots[key] == slot_index:
-			return key;
-	return &"";
-
-func get_method_slot_name(slot_index : int) -> StringName:
-	for key in _method_slots:
-		if _method_slots[key] == slot_index:
-			return key;
-	return &"";
+func get_member_from_slot_id(member_type : String, slot_id : int) -> Dictionary:
+	if !_member_cache.has(member_type): return {};
+	for member_name in _member_cache[member_type]:
+		var member : Dictionary = _member_cache[member_type][member_name];
+		if member["slot_id"] == slot_id:
+			return member;
+	return {};
 
 func method_add_requested(method_info : Dictionary) -> void:
 	var method_name := method_info["name"] as StringName;
-	editor.current_view.transactions.add_object_view_member(OBJECT_TYPE_NODE, get_object(), MEMBER_TYPE_METHOD, method_name);
+	editor.current_view.transactions.add_object_view_member(object_type, get_object(), MEMBER_TYPE_METHOD, method_name);
 
 func signal_add_requested(signal_info : Dictionary) -> void:
 	var signal_name := signal_info["name"] as StringName;
-	editor.current_view.transactions.add_object_view_member(OBJECT_TYPE_NODE, get_object(), MEMBER_TYPE_SIGNAL, signal_name);
+	editor.current_view.transactions.add_object_view_member(object_type, get_object(), MEMBER_TYPE_SIGNAL, signal_name);
 
 func _on_position_offset_changed() -> void:
 	update_view();
@@ -327,8 +329,9 @@ func _draw_port(slot_index: int, position: Vector2i, left: bool, color: Color) -
 	draw_texture(port_icon, Vector2(position) + icon_offset, color);
 	
 	# connection line not in view
+	var searching_member_type := MEMBER_TYPE_METHOD if left else MEMBER_TYPE_SIGNAL;
 	var searching_port_type := editor.port_type(&"method") if left else editor.port_type(&"signal");
-	var searching_slot_member_name := get_method_slot_name(slot_index) if left else get_signal_slot_name(slot_index);
+	var searching_slot_member_name : StringName = get_member_from_slot_id(searching_member_type,slot_index).get("member_name",&"");
 	var found_connection_index := _connections_not_in_view.find_custom(func (c : Dictionary) -> bool:
 		return c.port_type == searching_port_type && c.member_name == searching_slot_member_name;
 	);

@@ -95,6 +95,10 @@ func load(view : SignalGraphView) -> void:
 		_pending_rearrange_after_load = true;
 
 func _on_current_view_updated():
+	for hook in hooks.populate_graph_nodes_from_view:
+		hook.populate_graph_nodes_from_view();
+	for hook in hooks.populate_graph_node_connections:
+		hook.populate_graph_node_connections();
 	view_updated.emit();
 
 func rearrange_after_load():
@@ -234,6 +238,18 @@ class Hooks extends RefCounted:
 			],
 			"hooks": [] as Array[Object]
 		},
+		"populate_graph_nodes_from_view": {
+			"required_methods": [
+				&"populate_graph_nodes_from_view"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"populate_graph_node_connections": {
+			"required_methods": [
+				&"populate_graph_node_connections"
+			],
+			"hooks": [] as Array[Object]
+		},
 		"view_object_serialization": {
 			"required_methods": [
 				&"get_supported_view_object_types",
@@ -281,7 +297,10 @@ class Hooks extends RefCounted:
 			_init_hook(hook);
 		
 	func _add_builtin_hooks() -> void:
-		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_signals.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_objects.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/methods_and_signals.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/connection_flag_editing.gd"));
+		
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/nodes.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_with_connections.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_by_name.gd"));

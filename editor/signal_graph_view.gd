@@ -10,26 +10,6 @@ var view_rules : Dictionary = {};
 var scene_data : Dictionary = {};
 var scene_objects : Dictionary = {};
 
-#var view_data : Dictionary = {
-#	"view_rules": {
-#		"object_source": [
-#			{
-#				"id": "scene_signals:nodes",
-#				"params": {}
-#			}
-#		],
-#		"member_source": [
-#			{
-#				"id": "scene_signals:members_with_connections",
-#				"params": {}
-#			}
-#		]
-#	},
-#	"scene_data": {
-#		"objects": {}
-#	}
-#};
-
 func _init(editor : SignalGraphEditor):
 	self.editor = editor;
 	transactions = Transactions.new(editor, self);
@@ -180,7 +160,7 @@ func runtime_key_deserialize(object_type : String, serialized : Variant) -> Vari
 	_print_unsupported_object_type(object_type);
 	return null;
 
-func instantiate_graph_node_for_object(object_type : String, obj : Object, graph_node_script : Script) -> GraphNode:
+func instantiate_graph_node_for_object(object_type : String, obj : Object, graph_node_script : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd")) -> GraphNode:
 	if !obj: return null;
 	var graph_node : GraphNode = graph_node_script.new(object_type, obj, editor);
 	graph_node.name = _object_to_graph_node_name(object_type, obj);
