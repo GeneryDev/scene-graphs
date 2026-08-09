@@ -351,38 +351,38 @@ class Transactions extends RefCounted:
 			view.notify_view_updated();
 			view.select_object(object_type, obj);
 			
-			editor.transactions.begin_transaction("Add object view", UndoRedo.MERGE_ALL, null, false);
-			var undo_redo := editor.transactions.undo_redo;
+			var undo_redo := EditorInterface.get_editor_undo_redo();
+			undo_redo.create_action("Add object view", UndoRedo.MERGE_ALL, editor.scene_root, false);
 			undo_redo.add_do_method(view, &"set_object_view", object_type, obj, obj_view);
 			undo_redo.add_do_method(view, &"notify_view_updated");
 			undo_redo.add_do_method(view, &"select_object", object_type, obj);
 			undo_redo.add_undo_method(view, &"remove_object_view", object_type, obj);
 			undo_redo.add_undo_method(view, &"notify_view_updated");
-			editor.transactions.end_transaction(false);
+			undo_redo.commit_action(false);
 	
 	func remove_object_view(object_type : String, obj : Object) -> void:
 		if !view.has_object_view(object_type, obj):
 			return;
 		var obj_view := view.get_object_view(object_type, obj);
 		
-		editor.transactions.begin_transaction("Remove object view", UndoRedo.MERGE_ALL, null, false);
-		var undo_redo := editor.transactions.undo_redo;
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Remove object view", UndoRedo.MERGE_ALL, editor.scene_root, false);
 		undo_redo.add_do_method(view, &"remove_object_view", object_type, obj);
 		undo_redo.add_do_method(view, &"notify_view_updated");
 		undo_redo.add_undo_method(view, &"set_object_view", object_type, obj, obj_view);
 		undo_redo.add_undo_method(view, &"notify_view_updated");
 		undo_redo.add_undo_method(view, &"select_object", object_type, obj);
-		editor.transactions.end_transaction();
+		undo_redo.commit_action();
 	
 	func add_object_view_member(object_type : String, obj : Object, member_type : String, member_name : StringName) -> void:
 		if !view.add_object_view_member(object_type, obj, member_type, member_name):
 			return;
 		view.notify_view_updated();
 		
-		editor.transactions.begin_transaction("Add node view member", UndoRedo.MERGE_ALL, null, false);
-		var undo_redo := editor.transactions.undo_redo;
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Add object view member", UndoRedo.MERGE_ALL, editor.scene_root, false);
 		undo_redo.add_do_method(view, &"add_object_view_member", object_type, obj, member_type, member_name);
 		undo_redo.add_undo_method(view, &"remove_object_view_member", object_type, obj, member_type, member_name);
 		undo_redo.add_do_method(view, &"notify_view_updated");
 		undo_redo.add_undo_method(view, &"notify_view_updated");
-		editor.transactions.end_transaction(false);
+		undo_redo.commit_action(false);

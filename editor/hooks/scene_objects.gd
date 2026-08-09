@@ -88,7 +88,7 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 	for node_path : NodePath in data_dict["nodes"]:
 		var node := editor.get_node_or_null(node_path);
 		if !node: continue;
-		editor.current_view.transactions.add_object_view(OBJECT_TYPE_NODE, node, editor.utility.local_to_graph_position(at_position));
+		editor.current_view.transactions.add_object_view(OBJECT_TYPE_NODE, node, editor.local_to_graph_position(at_position));
 
 ### DELETING
 

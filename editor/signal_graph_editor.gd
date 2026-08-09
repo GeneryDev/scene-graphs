@@ -17,7 +17,6 @@ var selected_nodes : Array[StringName] = [];
 var dragging : bool = false;
 
 var interface_signals : InterfaceSignals;
-var transactions : Transactions;
 var utility : Utility;
 var hooks : Hooks;
 
@@ -41,7 +40,6 @@ var _pending_rearrange_after_load := false;
 
 func _init():
 	interface_signals = InterfaceSignals.new(self);
-	transactions = Transactions.new(self);
 	utility = Utility.new(self);
 	
 	connections_layer = get_node(^"_connection_layer");
@@ -199,10 +197,9 @@ func get_default_connection_line(from_position: Vector2, to_position: Vector2, c
 		return curve.tessellate(5, 2.0);
 	else:
 		return curve.tessellate(1);
-
-### Editor Settings
-
-const PROJECT_SETTING_NAME_HOOKS := &"signal_graphs/hooks/hook_scripts";
+	
+func local_to_graph_position(position : Vector2) -> Vector2:
+	return (position + scroll_offset) / zoom;
 
 ### HOOKS
 
@@ -649,9 +646,6 @@ class Utility extends RefCounted:
 	func _init(editor : SignalGraphEditor):
 		self.editor = editor;
 	
-	func local_to_graph_position(position : Vector2) -> Vector2:
-		return (position + editor.scroll_offset) / editor.zoom;
-	
 	static func get_method_signature_text(info : Dictionary) -> String:
 		var args : Array = info["args"];
 		var raw_defaults = info["default_args"];
@@ -709,73 +703,7 @@ class Utility extends RefCounted:
 					return load(a_class.icon);
 				return null;
 		return null;
-		
-	func get_common_ancestor(a : Node, b : Node) -> Node:
-		var common_ancestor : Node = a;
-		while common_ancestor != null && common_ancestor != editor.scene_root && !common_ancestor.is_ancestor_of(b):
-			common_ancestor = common_ancestor.get_parent();
-		return common_ancestor;
 
-### TRANSACTIONS
-class Transactions extends RefCounted:
-	var editor : SignalGraphEditor;
-	var undo_redo : EditorUndoRedoManager;
-	
-	func _init(editor : SignalGraphEditor):
-		self.editor = editor;
-		undo_redo = EditorInterface.get_editor_undo_redo();
-	
-	func begin_transaction(name : String, merge_mode : UndoRedo.MergeMode = UndoRedo.MergeMode.MERGE_ALL, custom_context : Object = null, backward_undo_ops : bool = false) -> void:
-		if custom_context == null:
-			custom_context = editor.scene_root;
-		undo_redo.create_action(name, merge_mode, custom_context, backward_undo_ops);
-		
-	func end_transaction(execute : bool = true):
-		undo_redo.commit_action(execute);
-	
-	func add_child(child : Node, do_reference : bool, create_and_commit : bool = true):
-		if create_and_commit:
-			begin_transaction("Create graph element", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		undo_redo.add_do_method(editor, &"add_child", child);
-		undo_redo.add_undo_method(editor, &"remove_child", child);
-		if do_reference:
-			undo_redo.add_do_reference(child);
-		if create_and_commit:
-			end_transaction();
-	
-	func remove_child(child : Node, undo_reference : bool, create_and_commit : bool = true):
-		if create_and_commit:
-			begin_transaction("Remove graph element", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		undo_redo.add_do_method(editor, &"remove_child", child);
-		undo_redo.add_undo_method(editor, &"add_child", child);
-		if undo_reference:
-			undo_redo.add_undo_reference(child);
-		if create_and_commit:
-			end_transaction();
-	
-	func connect_signal(from_node : Node, signal_name : StringName, callable : Callable, flags : ConnectFlags = ConnectFlags.CONNECT_PERSIST, create_and_commit : bool = true):
-		if create_and_commit:
-			begin_transaction("Connect signal", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		undo_redo.add_do_method(from_node, &"connect", signal_name, callable, flags);
-		undo_redo.add_undo_method(from_node, &"disconnect", signal_name, callable);
-		if create_and_commit:
-			end_transaction();
-	
-	func disconnect_signal(from_node : Node, signal_name : StringName, callable : Callable, create_and_commit : bool = true):
-		if create_and_commit:
-			begin_transaction("Disconnect signal", UndoRedo.MergeMode.MERGE_ALL, null, true);
-		
-		var flags := ConnectFlags.CONNECT_PERSIST;
-		for connection in from_node.get_signal_connection_list(signal_name):
-			var connectionCallable := connection["callable"] as Callable;
-			if connectionCallable == callable:
-				flags = connection["flags"];
-		
-		undo_redo.add_do_method(from_node, &"disconnect", signal_name, callable);
-		undo_redo.add_undo_method(from_node, &"connect", signal_name, callable, flags);
-		if create_and_commit:
-			end_transaction();
-			
 ### INTERFACE SIGNALS
 
 class InterfaceSignals extends RefCounted:

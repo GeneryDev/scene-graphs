@@ -111,16 +111,18 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	if !is_instance_of(from_graph_node, SceneObjectGraphNode): return;
 	if !is_instance_of(to_graph_node, SceneObjectGraphNode): return;
 	
-	editor.transactions.begin_transaction("Connect signal", UndoRedo.MergeMode.MERGE_ALL, null, false);
-	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
 	var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
 	var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
-	editor.transactions.connect_signal(from_object, signal_name, callable, CONNECT_PERSIST, false);
-	editor.transactions.undo_redo.add_do_method(self, &"notify_scene_connections_updated");
-	editor.transactions.undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
-	editor.transactions.end_transaction();
+	
+	var undo_redo := EditorInterface.get_editor_undo_redo();
+	undo_redo.create_action("Connect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
+	undo_redo.add_do_method(from_object, &"connect", signal_name, callable, CONNECT_PERSIST);
+	undo_redo.add_undo_method(from_object, &"disconnect", signal_name, callable);
+	undo_redo.add_do_method(self, &"notify_scene_connections_updated");
+	undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
+	undo_redo.commit_action();
 
 func _on_disconnection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
 	var from_graph_node := editor.get_node(NodePath(from_node_name));
@@ -128,16 +130,24 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	if !is_instance_of(from_graph_node, SceneObjectGraphNode): return;
 	if !is_instance_of(to_graph_node, SceneObjectGraphNode): return;
 	
-	editor.transactions.begin_transaction("Disconnect signal", UndoRedo.MergeMode.MERGE_ALL, null, false);
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
 	var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
 	var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
-	editor.transactions.disconnect_signal(from_object, signal_name, callable, false);
-	editor.transactions.undo_redo.add_do_method(self, &"notify_scene_connections_updated");
-	editor.transactions.undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
-	editor.transactions.end_transaction();
+	var flags := ConnectFlags.CONNECT_PERSIST;
+	for connection in from_object.get_signal_connection_list(signal_name):
+		var connection_callable := connection["callable"] as Callable;
+		if connection_callable == callable:
+			flags = connection["flags"];
+	
+	var undo_redo := EditorInterface.get_editor_undo_redo();
+	undo_redo.create_action("Disconnect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
+	undo_redo.add_do_method(from_object, &"disconnect", signal_name, callable);
+	undo_redo.add_undo_method(from_object, &"connect", signal_name, callable, flags);
+	undo_redo.add_do_method(self, &"notify_scene_connections_updated");
+	undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
+	undo_redo.commit_action();
 
 func _on_connections_changed() -> void:
 	for child : Node in editor.get_children():
