@@ -13,7 +13,13 @@ func _init(editor : SignalGraphEditor):
 	editor.delete_nodes_request.connect(_on_delete_nodes_request);
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["populate_graph_nodes_from_view","drag_and_drop","view_object_serialization"];
+	return ["configure_capabilities","populate_graph_nodes_from_view","drag_and_drop","view_object_serialization"];
+
+### CAPABILITY: configure_capabilities
+func configure_capabilities() -> void:
+	editor.hooks.register_capability("initialize_object_graph_node", [&"initialize_object_graph_node"] as Array[StringName]);
+	editor.hooks.register_capability("create_object_graph_node_slots", [&"create_object_graph_node_slots"] as Array[StringName]);
+	editor.hooks.register_capability("draw_object_graph_node_port", [&"draw_object_graph_node_port"] as Array[StringName]);
 	
 ### CAPABILITY: view_object_serialization
 func get_supported_view_object_types() -> Array[String]:
