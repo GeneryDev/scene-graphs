@@ -335,9 +335,11 @@ class Hooks extends RefCounted:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/methods_and_signals.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/connection_flag_editing.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/property_inspectors.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/node_references.gd"));
 		
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/nodes.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/connected_methods_and_signals.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/node_reference_properties.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_by_name.gd"));
 		
 	func add_hook(script : Script) -> bool:
