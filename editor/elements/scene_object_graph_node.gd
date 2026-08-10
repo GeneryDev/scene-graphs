@@ -12,6 +12,7 @@ func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 	self.editor = editor;
 	self.object_type = object_type;
 	self.obj = obj;
+	resizable = true;
 	
 	title = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 	

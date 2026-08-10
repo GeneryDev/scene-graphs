@@ -226,7 +226,6 @@ func get_member_selector_member_list(object_type : String, obj : Object, member_
 			);
 	
 	return members;
-
 	
 func _collect_members(obj : Object, script_getter : StringName, class_getter : StringName, instance_getter : StringName) -> Array:
 	var list : Array = [];

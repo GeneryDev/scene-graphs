@@ -315,6 +315,7 @@ class Hooks extends RefCounted:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_objects.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/methods_and_signals.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/connection_flag_editing.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/property_inspectors.gd"));
 		
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/nodes.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/connected_methods_and_signals.gd"));
@@ -472,7 +473,7 @@ class MemberSelector extends RefCounted:
 		);
 		if !member_types: return;
 		
-		var force_start_tab := member_types[0];
+		var force_start_tab := _last_selected_member_type if member_types.has(_last_selected_member_type) else member_types[0];
 		
 		_active = _create_member_selector(member_types, force_start_tab);
 		var dialog : ConfirmationDialog = _active["dialog"];

@@ -1,0 +1,209 @@
+﻿@tool
+extends RefCounted
+
+static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
+
+const OBJECT_TYPE_NODE := "node";
+const MEMBER_TYPE_PROPERTY := "properties";
+const ICON_NAME_PROPERTY := &"MemberProperty";
+
+const META_NAME_EXTENSION := &"_property_inspectors_extension";
+
+var editor : SignalGraphEditor;
+
+func _init(editor : SignalGraphEditor):
+	self.editor = editor;
+	
+func get_signal_graph_capabilities() -> Array[String]:
+	return ["initialize_object_graph_node","create_object_graph_node_slots","configure_member_selector"];
+
+# CAPABILITY: configure_member_selector
+func get_member_selector_member_types() -> Array[String]:
+	return [MEMBER_TYPE_PROPERTY];
+
+func get_member_selector_tab_info(member_type : String) -> Dictionary:
+	match member_type:
+		MEMBER_TYPE_PROPERTY:
+			return {
+				"label": "Properties",
+				"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_PROPERTY, &"EditorIcons")
+			};
+	return {};
+
+func get_member_selector_member_list(object_type : String, obj : Object, member_type : String) -> Array[Dictionary]:
+	var members : Array = [];
+	match member_type:
+		MEMBER_TYPE_PROPERTY:
+			members.append_array(_collect_members(obj, &"get_script_property_list", &"class_get_property_list", &"get_property_list"));
+			members = members.filter(_filter_properties_usable);
+			members = members.map(func (property_info : Dictionary) -> Dictionary:
+				return {
+					"member_type": MEMBER_TYPE_PROPERTY,
+					"member_name": property_info.name,
+					"label": property_info.name,
+					"icon": EditorInterface.get_editor_theme().get_icon(type_string(property_info.type), &"EditorIcons")
+				}
+			);
+	
+	return members;
+
+func _filter_properties_usable(property : Dictionary) -> bool:
+	if (property.usage & PROPERTY_USAGE_EDITOR) == 0: return false;
+	if (property.usage & PROPERTY_USAGE_GROUP) != 0: return false;
+	if (property.usage & PROPERTY_USAGE_CATEGORY) != 0: return false;
+	if (property.usage & PROPERTY_USAGE_SUBGROUP) != 0: return false;
+	return true;
+	
+func _collect_members(obj : Object, script_getter : StringName, class_getter : StringName, instance_getter : StringName) -> Array:
+	var list : Array = [];
+	var name_list : Array[StringName] = [];
+	
+	# Add members by script
+	var script : Script = obj.get_script();
+	while script != null && script_getter != null:
+		if script.has_method(script_getter):
+			for def in script.call(script_getter):
+				var name : StringName = def["name"];
+				if name_list.has(name):
+					continue;
+				name_list.push_back(name);
+				list.push_back(def);
+		script = script.get_base_script();
+	
+	# Add members by class
+	var cls_name := obj.get_class();
+	while cls_name && class_getter != null:
+		if ClassDB.has_method(class_getter):
+			for def in ClassDB.call(class_getter, cls_name):
+				var name : StringName = def["name"];
+				if name_list.has(name):
+					continue;
+				name_list.push_back(name);
+				list.push_back(def);
+		cls_name = ClassDB.get_parent_class(cls_name);
+	
+	# Add dynamic signals and methods for this specific node
+	if instance_getter && obj.has_method(instance_getter):
+		var insertion_index := 0;
+		for def in obj.call(instance_getter):
+			var name : StringName = def["name"];
+			if name_list.has(name):
+				continue;
+			name_list.push_back(name);
+			list.insert(insertion_index, def);
+			insertion_index += 1;
+	
+	return list;
+
+# CAPABILITY: initialize_object_graph_node
+func initialize_object_graph_node(graph_node : GraphNode) -> void:
+	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self));
+		
+# CAPABILITY: create_object_graph_node_slots
+func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]:
+	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
+
+class SceneObjectGraphNodeExtension extends RefCounted:
+	var graph_node : GraphNode;
+	var editor : SignalGraphEditor;
+	var hook : Object;
+	
+	func _init(graph_node : GraphNode, editor : SignalGraphEditor, hook : Object) -> void:
+		self.graph_node = graph_node;
+		self.editor = editor;
+		self.hook = hook;
+		
+	func create_object_graph_node_slots() -> Array[Dictionary]:
+		var created : Array[Dictionary] = [];
+		if graph_node.object_type != OBJECT_TYPE_NODE: return created;
+		
+		var property_slots := create_property_slots();
+		created.append_array(property_slots);
+		
+		return created;
+		
+	static func get_property_info_by_name(obj : Object, property_name : StringName) -> Dictionary:
+		for property_info in obj.get_property_list():
+			if property_info["name"] != property_name: continue;
+			return property_info;
+		return {};
+	
+	func create_property_slots() -> Array[Dictionary]:
+		var created : Array[Dictionary] = [];
+		var obj : Object = graph_node.get_object();
+		for property_name in editor.current_view.get_object_view_members(graph_node.object_type, obj, MEMBER_TYPE_PROPERTY):
+			var property_info := get_property_info_by_name(obj, property_name);
+			if !property_info:
+				print("No property found for name '" + property_name + "' in object " + str(obj));
+				continue;
+			
+			var row_control := _create_inspector_field(obj, property_info);
+			row_control.tooltip_text = "Property: " + property_name + ": " + type_string(property_info.type);
+			
+			created.append({
+				"control": row_control,
+				"sort_key": 0
+			});
+		return created;
+	
+	func _create_inspector_field(obj : Object, property : Dictionary) -> Control:
+		var container := VBoxContainer.new();
+		container.add_theme_constant_override(&"separation",0);
+		container.custom_minimum_size = Vector2(200, 20);
+		
+		var label := Label.new();
+		label.text = property.name.capitalize();
+		container.add_child(label);
+		
+		var property_container := MarginContainer.new();
+		property_container.add_theme_constant_override(&"margin_left", 16);
+		property_container.add_theme_constant_override(&"margin_right", 16);
+		property_container.add_theme_constant_override(&"margin_top", 0);
+		property_container.add_theme_constant_override(&"margin_bottom", 0);
+		container.add_child(property_container);
+	
+		var property_editor := EditorInspector.instantiate_property_editor(obj, property.type, "", property.hint, property.hint_string, property.usage);
+		property_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+#		property_editor.label = property.name.capitalize();
+		property_editor.draw_label = false;
+		property_editor.set_object_and_property(obj, property.name);
+		property_editor.selectable = false;
+		property_editor.update_property();
+		property_container.add_child(property_editor);
+		property_editor.property_changed.connect(_on_property_changed.bind(obj));
+		if (property.usage & PROPERTY_USAGE_ARRAY):
+			property_editor.property_changed.connect(func (_property: StringName, _value: Variant, _field: StringName, _changing: bool) -> void:
+				property_editor.update_property();
+			);
+		if property.hint == PROPERTY_HINT_MULTILINE_TEXT:
+			property_container.add_theme_constant_override(&"margin_top", -28);
+#			(func() -> void:
+#				property_editor.print_tree_pretty();
+#				print(property_editor.get_child(2).get_child(0).get_combined_minimum_size());
+#				property_editor.get_child(2).get_child(0).custom_minimum_size = Vector2(16,30*2);
+#			).call_deferred();
+		
+		var padding := Control.new();
+		padding.mouse_filter = Control.MOUSE_FILTER_IGNORE;
+		padding.custom_minimum_size = Vector2(0, 8);
+		container.add_child(padding);
+	
+		return container;
+
+	func _on_property_changed(property: StringName, value: Variant, field: StringName, changing: bool, obj : Object) -> void:
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Set " + property, UndoRedo.MERGE_ALL, obj, true);
+		undo_redo.add_do_property(obj, property, value);
+		undo_redo.add_undo_property(obj, property, obj.get(property));
+		undo_redo.commit_action(true);
+	
+	func _create_icon_control(icon_name : String, height : int) -> Control:
+		if icon_name:
+			var texture_rect := TextureRect.new();
+			texture_rect.texture = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons");
+			texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED;
+			return texture_rect;
+		else:
+			var control := Control.new();
+			control.custom_minimum_size = Vector2(height, height);
+			return control;
