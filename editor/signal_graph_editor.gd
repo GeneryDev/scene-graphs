@@ -15,6 +15,7 @@ var dragging : bool = false;
 
 var interface_signals : InterfaceSignals;
 var member_selector : SignalGraphMemberSelector;
+var arranger : Arranger;
 var hooks : Hooks;
 
 var current_view : SignalGraphView:
@@ -38,6 +39,7 @@ var _pending_rearrange_after_load := false;
 func _init():
 	interface_signals = InterfaceSignals.new(self);
 	member_selector = SignalGraphMemberSelector.new(self);
+	arranger = Arranger.new(self);
 	
 	connections_layer = get_node(^"_connection_layer");
 	hooks = Hooks.new(self);
@@ -96,7 +98,10 @@ func _on_current_view_updated():
 
 func rearrange_after_load():
 	_pending_rearrange_after_load = false;
-#	arrange_nodes();
+	arranger.flush_arrange();
+
+func queue_arrange(node : GraphElement) -> void:
+	arranger.queue_arrange(node);
 
 func port_type(name : StringName) -> int:
 	if _port_types_by_name.has(name):
@@ -522,3 +527,30 @@ class InterfaceSignals extends RefCounted:
 		if !editor.current_view: return;
 		editor.current_view.scene_data.scroll_offset = editor.scroll_offset;
 		editor.current_view.scene_data.zoom = editor.zoom;
+
+### Arranger
+
+class Arranger extends RefCounted:
+	var editor : SignalGraphEditor;
+	
+	var _queued_for_arrange : Array = [];
+	
+	func _init(editor : SignalGraphEditor):
+		self.editor = editor;
+	
+	func queue_arrange(node : GraphElement) -> void:
+		if _queued_for_arrange.has(node): return;
+		_queued_for_arrange.append(node);
+	
+	func flush_arrange() -> void:
+		if !_queued_for_arrange: return;
+		_queued_for_arrange = _queued_for_arrange.filter(_is_still_valid);
+		if !_queued_for_arrange: return;
+		editor.set_selected(null);
+		for elem : GraphElement in _queued_for_arrange:
+			elem.selected = true;
+		editor.arrange_nodes();
+		editor.set_selected(null);
+	
+	func _is_still_valid(node : GraphElement) -> bool:
+		return node != null && is_instance_valid(node) && node.get_parent() == editor;

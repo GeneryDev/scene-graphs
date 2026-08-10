@@ -46,6 +46,9 @@ func update_from_view() -> void:
 	
 	if obj_view.has("position_offset"):
 		position_offset = obj_view["position_offset"] as Vector2;
+	else:
+		position_offset = Vector2.ZERO;
+		editor.queue_arrange(self);
 	
 	if obj_view.has("user_size"):
 		user_size = obj_view["user_size"] as Vector2;
