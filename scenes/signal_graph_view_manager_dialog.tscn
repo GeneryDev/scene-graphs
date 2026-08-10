@@ -4,14 +4,14 @@
 oversampling_override = 1.0
 title = "Edit Signal Graph Views"
 position = Vector2i(0, 36)
-size = Vector2i(720, 400)
+size = Vector2i(720, 500)
 visible = true
 
 [node name="Content" type="VBoxContainer" parent="." unique_id=408346596]
 offset_left = 8.0
 offset_top = 8.0
 offset_right = 712.0
-offset_bottom = 351.0
+offset_bottom = 451.0
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Content" unique_id=1481837627]
 layout_mode = 2

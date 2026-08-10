@@ -15,8 +15,22 @@ func _init(editor : SignalGraphEditor):
 	self.editor = editor;
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["initialize_object_graph_node","create_object_graph_node_slots","configure_member_selector"];
+	return ["initialize_object_graph_node","configure_hook_options","create_object_graph_node_slots","configure_member_selector"];
 
+### CAPABILITY: configure_hook_options
+func get_hook_options_id() -> String:
+	return "signal_graphs:property_inspectors";
+
+func get_hook_options_label(options : Options) -> String:
+	if options == null: return "Property Inspectors";
+	return "Property Inspectors: %s" % ["Enabled" if options.enable_property_inspectors else "Disabled"];
+
+func create_hook_options() -> Options:
+	return Options.new();
+
+func get_hook_description() -> String:
+	return "Sets up inspectors for selected object properties within the graph itself.\nNote: objects must have property members visible in the view, added either by a Member Source view rule, or manually.";
+	
 # CAPABILITY: configure_member_selector
 func get_member_selector_member_types() -> Array[String]:
 	return [MEMBER_TYPE_PROPERTY];
@@ -101,6 +115,7 @@ func initialize_object_graph_node(graph_node : GraphNode) -> void:
 		
 # CAPABILITY: create_object_graph_node_slots
 func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]:
+	if !editor.current_view.get_hook_options(self).enable_property_inspectors: return [];
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
 
 class SceneObjectGraphNodeExtension extends RefCounted:
@@ -207,3 +222,6 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			var control := Control.new();
 			control.custom_minimum_size = Vector2(height, height);
 			return control;
+	
+class Options extends RefCounted:
+	@export var enable_property_inspectors : bool = true;

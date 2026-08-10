@@ -52,7 +52,14 @@ func setup_inspector() -> void:
 	var dropdown : OptionButton = %"Rule Dropdown";
 	var hook := _hooks[dropdown.selected];
 	
+	if hook.has_method(&"get_view_rule_description"):
+		%"Description Label".text = hook.get_view_rule_description();
+		%"Description Label".visible = true;
+	else:
+		%"Description Label".visible = false;
+	
 	if hook.has_method(&"create_view_rule_params"):
+		
 		for property in _editing_params.get_property_list():
 			if property.name == &"script": continue;
 			var value = _editing_params.get(property.name);

@@ -84,6 +84,9 @@ func _should_include_node(node : Node, params : Params) -> bool:
 func create_view_rule_params() -> Object:
 	return Params.new();
 
+func get_view_rule_description() -> String:
+	return "Adds graph objects corresponding to each node in the scene, based on certain criteria.";
+
 class Params extends RefCounted:
 	@export var sub_paths : Array[String];
 	@export var require_shown_members : bool = true;

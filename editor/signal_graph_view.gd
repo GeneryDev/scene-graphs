@@ -7,6 +7,7 @@ var editor : SignalGraphEditor;
 var transactions : Transactions;
 
 var view_rules : Dictionary = {};
+var hook_options : Dictionary = {};
 var scene_data : Dictionary = {};
 var scene_objects : Dictionary = {};
 
@@ -220,6 +221,38 @@ func rule_params_to_dict(hook : Object, params : Variant) -> Dictionary:
 		raw_params[property.name] = value;
 	return raw_params;
 
+func hook_options_from_dict(hook : Object, raw_options : Dictionary) -> Variant:
+	if !hook: return null;
+	if !hook.has_method(&"create_hook_options"): return null;
+	var params : Object = hook.create_hook_options();
+	
+	for key in raw_options:
+		var raw_value = raw_options[key];
+		var default_value = params.get(key);
+		if default_value == null: continue;
+		if default_value is Array:
+			default_value.assign(raw_value);
+		elif default_value is Dictionary:
+			default_value.assign(raw_value);
+		else:
+			params.set(key, raw_value);
+	return params;
+
+func hook_options_to_dict(hook : Object, params : Variant) -> Dictionary:
+	if !params: return {};
+	var raw_params : Dictionary = {};
+	for property in params.get_property_list():
+		if property.name == &"script": continue;
+		var value = params.get(property.name);
+		if value == null: continue;
+		raw_params[property.name] = value;
+	return raw_params;
+
+func get_hook_options(hook : Object) -> Variant:
+	var id : String = hook.get_hook_options_id();
+	var raw_hook_options : Dictionary = self.hook_options.get(id,{});
+	return hook_options_from_dict(hook, raw_hook_options);
+
 func get_view_rules_of_type(rule_type : String) -> Array:
 	return view_rules.get_or_add(rule_type, {});
 
@@ -295,6 +328,7 @@ func has_any_scene_data() -> bool:
 func serialize() -> Dictionary:
 	var serialized := {
 		"view_rules": view_rules,
+		"hook_options": hook_options,
 		"scene_data": scene_data.duplicate(false)
 	};
 	var serialized_objects : Dictionary = {};
@@ -313,7 +347,9 @@ func serialize() -> Dictionary:
 
 func deserialize(serialized_view : Dictionary) -> SignalGraphView:
 	view_rules = serialized_view.get("view_rules",{}).duplicate(false);
+	hook_options = serialized_view.get("hook_options",{}).duplicate(false);
 	scene_data = serialized_view.get("scene_data",{}).duplicate(false);
+	
 	scene_objects = {};
 	if scene_data.has("objects"):
 		var serialized_objects : Dictionary = scene_data.objects;
@@ -331,8 +367,10 @@ func copy_non_scene_data_from(other : SignalGraphView, duplicate_deep : bool = f
 	if !other: return;
 	if duplicate_deep:
 		view_rules = other.view_rules.duplicate(true);
+		hook_options = other.hook_options.duplicate(true);
 	else:
 		view_rules = other.view_rules;
+		hook_options = other.hook_options;
 
 func clear_scene_data() -> void:
 	scene_data.clear();

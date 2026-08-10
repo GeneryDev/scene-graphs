@@ -275,12 +275,27 @@ class Hooks extends RefCounted:
 			],
 			"hooks": [] as Array[Object]
 		},
+		"configure_hook_options": {
+			"required_methods": [
+				&"get_hook_options_id",
+				&"get_hook_options_label",
+				&"create_hook_options",
+			],
+			"optional_methods": [
+				&"get_hook_description"
+			],
+			"hooks": [] as Array[Object]
+		},
 		
 		"view_rule.object_source": {
 			"required_methods": [
 				&"get_view_rule_id",
 				&"generate_view_objects",
 				&"get_view_rule_label"
+			],
+			"optional_methods": [
+				&"create_view_rule_params",
+				&"get_view_rule_description"
 			],
 			"hooks": [] as Array[Object]
 		},
@@ -289,6 +304,10 @@ class Hooks extends RefCounted:
 				&"get_view_rule_id",
 				&"generate_view_object_members",
 				&"get_view_rule_label"
+			],
+			"optional_methods": [
+				&"create_view_rule_params",
+				&"get_view_rule_description"
 			],
 			"hooks": [] as Array[Object]
 		}

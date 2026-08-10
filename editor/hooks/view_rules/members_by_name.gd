@@ -70,6 +70,9 @@ func generate_view_object_members(object_type : String, obj : Object, params : P
 func create_view_rule_params() -> Object:
 	return Params.new();
 
+func get_view_rule_description() -> String:
+	return "Adds members to each object in the graph by name.";
+
 class Params extends RefCounted:
 	@export var properties : Array[StringName];
 	@export var methods : Array[StringName];

@@ -18,6 +18,9 @@ func get_view_rule_id() -> String:
 func get_view_rule_label(params : Variant) -> String:
 	return "Connected methods/signals";
 
+func get_view_rule_description() -> String:
+	return "Adds method and signal members to each object in the graph, corresponding to existing signal-method connections.";
+	
 func generate_view_object_members(object_type : String, obj : Object, params : Variant) -> Array:
 	var members := [];
 	

@@ -331,6 +331,8 @@ class EditViewsDialog extends RefCounted:
 	const ACTION_MOVE_UP : int = 2;
 	const ACTION_MOVE_DOWN : int = 3;
 	const ACTION_REMOVE_RULE : int = 4;
+	
+	const ACTION_EDIT_HOOK : int = 5;
 
 	var _active : Dictionary;
 	
@@ -372,10 +374,16 @@ class EditViewsDialog extends RefCounted:
 		tree.clear();
 		
 		var root_item := tree.create_item();
-		root_item.set_text(COL_MAIN, "Rules");
-		_populate_rule_type(tree, "object_source")
-		_populate_rule_type(tree, "member_source")
-		tree.set_drag_forwarding(_tree_drag, _tree_can_drop, _tree_drop);
+
+		var options_root_item := tree.create_item(root_item);
+		options_root_item.set_text(COL_MAIN, "Options");
+		for hook in editor.hooks.configure_hook_options:
+			_populate_hook_option(tree, options_root_item, hook);
+				
+		var rules_root_item := tree.create_item(root_item);
+		rules_root_item.set_text(COL_MAIN, "Rules");
+		_populate_rule_type(tree, rules_root_item, "object_source");
+		_populate_rule_type(tree, rules_root_item, "member_source");
 	
 	func _populate_toolbar(metadata : Dictionary) -> void:
 		var view_button : MenuButton = _active["view_button"];
@@ -403,15 +411,15 @@ class EditViewsDialog extends RefCounted:
 		
 		var localized_view : SignalGraphView = view_manager.get_localized_view(metadata.view_name);
 		
-		_active["graph_node_count_label"].text = str(localized_view.get_scene_object_count()) if localized_view.has_any_scene_data() else "Unknown";
+		_active["graph_node_count_label"].text = str(localized_view.get_scene_object_count()) if localized_view && localized_view.has_any_scene_data() else "Unknown";
 	
 	func _make_global(global : bool) -> void:
 		var new_metadata : Dictionary = view_manager.change_view_type(editing_view_metadata, "global" if global else "local");
 		repopulate_view_dropdown();
 		edit_view(new_metadata);
 	
-	func _populate_rule_type(tree : Tree, rule_type : String) -> void:
-		var rule_type_item := tree.create_item(tree.get_root());
+	func _populate_rule_type(tree : Tree, rules_root_item : TreeItem, rule_type : String) -> void:
+		var rule_type_item := tree.create_item(rules_root_item);
 		rule_type_item.set_text(COL_MAIN, RULE_TYPE_CONSTANTS[rule_type].label);
 		rule_type_item.set_tooltip_text(COL_MAIN, RULE_TYPE_CONSTANTS[rule_type].tooltip);
 		for col in range(tree.columns):
@@ -452,6 +460,21 @@ class EditViewsDialog extends RefCounted:
 		else:
 			var no_rule_item := tree.create_item(rule_type_item);
 			no_rule_item.set_text(0, "(none)");
+		
+	func _populate_hook_option(tree : Tree, options_root_item : TreeItem, hook : Object) -> void:
+		var theme := EditorInterface.get_editor_theme();
+		if !hook: return;
+		var hook_item := tree.create_item(options_root_item);
+		hook_item.set_text(COL_MAIN, hook.get_hook_options_label(editing_view.get_hook_options(hook)));
+		hook_item.set_icon(COL_MAIN, theme.get_icon("Script", "EditorIcons"));
+		
+		hook_item.add_button(COL_BUTTONS, theme.get_icon("Edit", "EditorIcons"), ACTION_EDIT_HOOK, false, "Edit");
+		
+		hook_item.set_metadata(0, {
+			"row_type": "hook",
+			"hook": hook
+		});
+		pass;
 	
 	func _tree_drag(at_position : Vector2) -> Variant:
 		var tree : Tree = _active["tree"];
@@ -459,10 +482,13 @@ class EditViewsDialog extends RefCounted:
 		if !item: return null;
 		var metadata = item.get_metadata(0);
 		if !metadata: return {};
-		return {
-			"type": "view_rule",
-			"metadata": metadata
-		};
+		match metadata.get("row_type"):
+			"rule":
+				return {
+					"type": "view_rule",
+					"metadata": metadata
+				};
+		return null;
 	func _tree_can_drop(at_position : Vector2, data : Dictionary) -> bool:
 		var tree : Tree = _active["tree"];
 		
@@ -471,7 +497,7 @@ class EditViewsDialog extends RefCounted:
 		if !target_item: return _cannot_drop();
 		var target_item_metadata = target_item.get_metadata(0);
 		if !target_item_metadata: return _cannot_drop();
-		if target_item_metadata.row_type != "rule": return _cannot_drop();
+		if target_item_metadata.get("row_type") != "rule": return _cannot_drop();
 		if target_item_metadata.rule_type != data.metadata.rule_type: return _cannot_drop();
 		tree.drop_mode_flags = Tree.DROP_MODE_INBETWEEN;
 		return true;
@@ -499,6 +525,8 @@ class EditViewsDialog extends RefCounted:
 				move_rule(item.get_metadata(0), +1);
 			ACTION_REMOVE_RULE:
 				remove_rule(item.get_metadata(0));
+			ACTION_EDIT_HOOK:
+				edit_hook_options(item.get_metadata(0));
 	
 	func move_rule(metadata : Dictionary, offset : int) -> void:
 		var rule_type : String = metadata.rule_type;
@@ -546,6 +574,17 @@ class EditViewsDialog extends RefCounted:
 		rule_arr.remove_at(rule_index);
 		call_deferred(&"_populate_tree");
 	
+	func edit_hook_options(metadata : Dictionary) -> void:
+		var hook : Object = metadata.hook;
+		var dialog : Window = load("res://addons/signal-graphs/scenes/signal_graph_hook_option_edit_dialog.tscn").instantiate();
+		dialog.setup(hook, editing_view.get_hook_options(hook));
+		dialog.finished.connect(func (selected_hook : Object, selected_options : Variant) -> void:
+			var id : String = hook.get_hook_options_id();
+			editing_view.hook_options[id] = editor.current_view.hook_options_to_dict(selected_hook, selected_options);
+			call_deferred(&"_populate_tree");
+		);
+		EditorInterface.popup_dialog_centered(dialog);
+	
 	func create_dialog() -> Dictionary:
 		var output : Dictionary = {
 			"dialog": null,
@@ -583,7 +622,9 @@ class EditViewsDialog extends RefCounted:
 		var tree : Tree = dialog.get_node("%Tree");
 		output["tree"] = tree;
 		tree.columns = 2;
+		tree.hide_root = true;
 		tree.set_column_expand(COL_BUTTONS, false);
+		tree.set_drag_forwarding(_tree_drag, _tree_can_drop, _tree_drop);
 		tree.button_clicked.connect(_on_tree_button_clicked);
 		
 		dialog.close_requested.connect(dialog.queue_free);

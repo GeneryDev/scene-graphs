@@ -1,14 +1,14 @@
-[gd_scene format=3 uid="uid://ci8s6q08dancq"]
+[gd_scene format=3 uid="uid://d1p3pfr5y5cgr"]
 
-[ext_resource type="Script" uid="uid://dpin1n0x5mxl2" path="res://addons/signal-graphs/editor/dialogs/signal_graph_view_rule_edit_dialog.gd" id="1_ikqc1"]
+[ext_resource type="Script" uid="uid://2djrbdgwh67v" path="res://addons/signal-graphs/editor/dialogs/signal_graph_hook_option_edit_dialog.gd" id="1_s07aw"]
 
-[node name="Signal Graph View Rule Edit Dialog" type="ConfirmationDialog" unique_id=1062255079]
+[node name="Signal Graph Hook Option Edit Dialog" type="ConfirmationDialog" unique_id=1062255079]
 oversampling_override = 1.0
-title = "Edit View Rule"
+title = "Edit Hook Options"
 position = Vector2i(0, 36)
 size = Vector2i(560, 300)
 visible = true
-script = ExtResource("1_ikqc1")
+script = ExtResource("1_s07aw")
 
 [node name="Content" type="VBoxContainer" parent="." unique_id=408346596]
 offset_left = 8.0
@@ -22,14 +22,15 @@ layout_mode = 2
 [node name="Type Label" type="Label" parent="Content/HBoxContainer" unique_id=1049080258]
 unique_name_in_owner = true
 layout_mode = 2
-text = "View Rule"
+text = "Hook:"
 
-[node name="Rule Dropdown" type="OptionButton" parent="Content/HBoxContainer" unique_id=815000166]
+[node name="Hook Name Label" type="Label" parent="Content/HBoxContainer" unique_id=960812026]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+text = "Hook Name"
 
-[node name="Description Label" type="Label" parent="Content" unique_id=1950493333]
+[node name="Description Label" type="Label" parent="Content" unique_id=739127650]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2

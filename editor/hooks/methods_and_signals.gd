@@ -26,7 +26,7 @@ func _init(editor : SignalGraphEditor):
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["configure_port_types","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port","configure_member_selector"];
+	return ["configure_port_types","configure_hook_options","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port","configure_member_selector"];
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
@@ -35,6 +35,20 @@ func configure_port_types() -> void:
 	editor.add_valid_connection_type(editor.port_type(&"signal"), editor.port_type(&"method"));
 	editor.add_valid_connection_type(editor.port_type(&"signal"), editor.port_type(&"wildcard_in"));
 	editor.add_valid_connection_type(editor.port_type(&"wildcard_out"), editor.port_type(&"method"));
+
+### CAPABILITY: configure_hook_options
+func get_hook_options_id() -> String:
+	return "signal_graphs:methods_and_signals";
+
+func get_hook_options_label(options : Options) -> String:
+	if options == null: return "Methods and Signals";
+	return "Methods and Signals: %s" % ["Enabled" if options.enable_method_and_signal_ports else "Disabled"];
+
+func create_hook_options() -> Options:
+	return Options.new();
+
+func get_hook_description() -> String:
+	return "Sets up ports and connections corresponding to methods and signals.\nNote: objects must have method and signal members visible in the view, added either by a Member Source view rule, or manually.";
 
 func _on_scene_connections_updated() -> void:
 	populate_graph_node_connections();
@@ -274,6 +288,7 @@ func initialize_object_graph_node(graph_node : GraphNode) -> void:
 		
 # CAPABILITY: create_object_graph_node_slots
 func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]:
+	if !editor.current_view.get_hook_options(self).enable_method_and_signal_ports: return [];
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
 		
 # CAPABILITY: create_object_graph_node_slots
@@ -597,3 +612,6 @@ class EqualDistributionHBoxContainer extends Container:
 		match what:
 			NOTIFICATION_SORT_CHILDREN:
 				_sort_children();
+	
+class Options extends RefCounted:
+	@export var enable_method_and_signal_ports : bool = true;
