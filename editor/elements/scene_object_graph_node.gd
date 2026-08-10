@@ -15,6 +15,7 @@ func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 	self.object_type = object_type;
 	self.obj = obj;
 	resizable = true;
+	custom_minimum_size = Vector2(120, 0);
 	
 	title = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 	
@@ -77,7 +78,10 @@ func rebuild_contents_from_view() -> void:
 
 func reset_to_user_size() -> void:
 	reset_size();
-	size = size.max(user_size);
+	var size = self.size;
+	var snapping_distance := editor.snapping_distance;
+	size = Vector2(ceil(size.x / snapping_distance)*snapping_distance,ceil(size.y / snapping_distance)*snapping_distance);
+	self.size = size.max(user_size);
 
 func create_and_add_contents() -> void:
 	var slots_to_add : Array[Dictionary]= [];
