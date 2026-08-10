@@ -5,8 +5,10 @@ var obj : Object;
 
 var editor : SignalGraphEditor;
 var _member_cache : Dictionary = {};
+var user_size : Vector2;
 
 var _last_built_view : Dictionary = {};
+var _building_from_view := false;
 
 func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 	self.editor = editor;
@@ -31,27 +33,37 @@ func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 		hook.initialize_object_graph_node(self);
 	
 	position_offset_changed.connect(_on_position_offset_changed);
+	resize_end.connect(_on_resize_end);
 
 func get_object() -> Object:
 	return obj;
 
 func update_from_view() -> void:
+	_building_from_view = true;
 	var obj := get_object();
 	var obj_view := editor.current_view.get_object_view(object_type, obj);
+	
+	if obj_view.has("position_offset"):
+		position_offset = obj_view["position_offset"] as Vector2;
+	
+	if obj_view.has("user_size"):
+		user_size = obj_view["user_size"] as Vector2;
 	
 	if !_last_built_view.recursive_equal(obj_view, 3):
 		_last_built_view = obj_view.duplicate(true);
 		rebuild_contents_from_view();
 	
-	if obj_view.has("position_offset"):
-		position_offset = obj_view["position_offset"] as Vector2;
+	reset_to_user_size();
+	_building_from_view = false;
 	
 func update_view() -> void:
+	if _building_from_view: return;
 	var obj := get_object();
 	var obj_view := editor.current_view.get_object_view(object_type, obj);
 	if !obj_view: return;
 	
 	obj_view["position_offset"] = position_offset;
+	obj_view["user_size"] = user_size;
 	
 func rebuild_contents_from_view() -> void:
 	clear_all_slots();
@@ -61,7 +73,11 @@ func rebuild_contents_from_view() -> void:
 		child.queue_free();
 	
 	create_and_add_contents();
+	reset_to_user_size();
+
+func reset_to_user_size() -> void:
 	reset_size();
+	size = size.max(user_size);
 
 func create_and_add_contents() -> void:
 	var slots_to_add : Array[Dictionary]= [];
@@ -143,6 +159,10 @@ func get_member_from_slot_id(member_type : String, slot_id : int) -> Dictionary:
 	return {};
 
 func _on_position_offset_changed() -> void:
+	update_view();
+
+func _on_resize_end(new_size : Vector2) -> void:
+	user_size = new_size;
 	update_view();
 	
 func _draw_port(slot_index: int, position: Vector2i, left: bool, color: Color) -> void:
