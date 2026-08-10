@@ -6,6 +6,67 @@ extends Node
 const COL_MAIN : int = 0;
 const COL_BUTTONS : int = 1;
 
+const default_views : Dictionary = {
+	"Default: Signals": {
+		"hook_options": {
+			"signal_graphs:methods_and_signals": {
+				"enable_method_and_signal_ports": true
+			},
+			"signal_graphs:property_inspectors": {
+				"enable_property_inspectors": false
+			},
+			"signal_graphs:node_references": {
+				"enable_node_reference_ports": true
+			}
+		},
+		"view_rules": {
+			"member_source": [
+				{
+					"id": "signal_graphs:connected_methods_and_signals",
+					"params": {}
+				}
+			],
+			"object_source": [
+				{
+					"id": "signal_graphs:nodes",
+					"params": {
+						"require_connections": true
+					}
+				}
+			]
+		}
+	},
+	"Default: Node References": {
+		"hook_options": {
+			"signal_graphs:methods_and_signals": {
+				"enable_method_and_signal_ports": false
+			},
+			"signal_graphs:property_inspectors": {
+				"enable_property_inspectors": false
+			},
+			"signal_graphs:node_references": {
+				"enable_node_reference_ports": true
+			}
+		},
+		"view_rules": {
+			"member_source": [
+				{
+					"id": "signal_graphs:node_reference_properties",
+					"params": {}
+				}
+			],
+			"object_source": [
+				{
+					"id": "signal_graphs:nodes",
+					"params": {
+						"require_connections": true
+					}
+				}
+			]
+		}
+	}
+};
+
 var global_views : Dictionary = {}
 var local_views : Dictionary = {}
 
@@ -271,30 +332,20 @@ func get_fallback_local_view_metadata() -> Dictionary:
 	return _help_no_views_available();
 
 func _help_no_views_available() -> Dictionary:
-	return create_default_view();
+	return create_default_views();
 
-func create_default_view() -> Dictionary:
-	var metadata := {
-		"view_name": "(default)",
-		"view_type": "global"
-	};
-	var serialized_view_data := {
-		"view_rules": {
-			"object_source": [
-				{
-					"id": "signal_graphs:nodes",
-					"params": {}
-				}
-			],
-			"member_source": [
-				{
-					"id": "signal_graphs:connected_methods_and_signals",
-					"params": {}
-				}
-			]
-		}
-	};
-	return create_view(metadata, SignalGraphView.new(editor).deserialize(serialized_view_data));
+func create_default_views() -> Dictionary:
+	var first_metadata : Dictionary;
+	for name in default_views:
+		var metadata := {
+			"view_name": name,
+			"view_type": "global"
+		};
+		var serialized_view_data : Dictionary = default_views[name];
+		metadata = create_view(metadata, SignalGraphView.new(editor).deserialize(serialized_view_data));
+		if !first_metadata:
+			first_metadata = metadata;
+	return first_metadata;
 
 func sanitize_view_rules(view : SignalGraphView) -> void:
 	if !view: return;
