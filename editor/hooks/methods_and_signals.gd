@@ -39,10 +39,6 @@ func _on_scene_connections_updated() -> void:
 func notify_scene_connections_updated() -> void:
 	scene_connections_updated.emit();
 	
-func _disconnect_all_for_node(name : StringName) -> void:
-	for connection in editor.get_connection_list_from_node(name):
-		editor.disconnect_node(connection.from_node, connection.from_port, connection.to_node, connection.to_port);
-
 func populate_graph_node_connections() -> void:
 	for child : Node in editor.get_children():
 		if !is_instance_of(child, SceneObjectGraphNode):
@@ -52,10 +48,11 @@ func populate_graph_node_connections() -> void:
 		
 		var obj : Object = child.get_object();
 		
-		# Remove all incoming connections -- we'll re-add them after
+		# Remove all incoming connections of our handled type -- we'll re-add them after
 		for connection in editor.get_connection_list_from_node(graph_node.name):
-			if connection.to_node == graph_node.name:
-				editor.disconnect_node(connection.from_node, connection.from_port, connection.to_node, connection.to_port);
+			if connection.to_node != graph_node.name: continue;
+			if !editor.check_connection_port_types(connection, editor.port_type(&"signal"), editor.port_type(&"method")): continue;
+			editor.disconnect_node(connection.from_node, connection.from_port, connection.to_node, connection.to_port);
 		
 		for connection in obj.get_incoming_connections():
 			var sgnal : Signal = connection["signal"];
@@ -116,6 +113,9 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	if !is_instance_of(from_graph_node, SceneObjectGraphNode): return;
 	if !is_instance_of(to_graph_node, SceneObjectGraphNode): return;
 	
+	if (from_graph_node as GraphNode).get_output_port_type(from_port) != editor.port_type(&"signal"): return;
+	if (to_graph_node as GraphNode).get_input_port_type(to_port) != editor.port_type(&"method"): return;
+	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
 	var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
@@ -135,6 +135,8 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	if !is_instance_of(from_graph_node, SceneObjectGraphNode): return;
 	if !is_instance_of(to_graph_node, SceneObjectGraphNode): return;
 	
+	if (from_graph_node as GraphNode).get_output_port_type(from_port) != editor.port_type(&"signal"): return;
+	if (to_graph_node as GraphNode).get_input_port_type(to_port) != editor.port_type(&"method"): return;
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();

@@ -44,14 +44,10 @@ func _refresh_connection_elements() -> void:
 		cached_connection.still_valid = false;
 	
 	for connection : Dictionary in editor.connections:
+		if !editor.check_connection_port_types(connection, editor.port_type(&"signal"), editor.port_type(&"method")): continue;
+		
 		var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
 		var to_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.to_node));
-		if !is_instance_of(from_graph_node, SceneObjectGraphNode): continue;
-		if !is_instance_of(to_graph_node, SceneObjectGraphNode): continue;
-		if connection.from_port >= from_graph_node.get_output_port_count(): continue;
-		if connection.to_port >= to_graph_node.get_input_port_count(): continue;
-		if from_graph_node.get_output_port_type(connection.from_port) != editor.port_type(&"signal"): continue;
-		if to_graph_node.get_input_port_type(connection.to_port) != editor.port_type(&"method"): continue;
 		
 		var matching_cached_connection : Dictionary;
 		

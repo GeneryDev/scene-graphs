@@ -201,6 +201,21 @@ func get_default_connection_line(from_position: Vector2, to_position: Vector2, c
 func local_to_graph_position(position : Vector2) -> Vector2:
 	return (position + scroll_offset) / zoom;
 
+func check_connection_port_types(connection : Dictionary, from_port_type : int, to_port_type : int) -> bool:
+	var from_graph_node := get_node(NodePath(connection.from_node));
+	var to_graph_node := get_node(NodePath(connection.to_node));
+	
+	if !from_graph_node: return false;
+	if !to_graph_node: return false;
+	
+	if connection.from_port >= from_graph_node.get_output_port_count(): return false;
+	if connection.to_port >= to_graph_node.get_input_port_count(): return false;
+
+	if (from_graph_node as GraphNode).get_output_port_type(connection.from_port) != from_port_type: return false;
+	if (to_graph_node as GraphNode).get_input_port_type(connection.to_port) != to_port_type: return false;
+	
+	return true;
+
 ### HOOKS
 
 class Hooks extends RefCounted:
