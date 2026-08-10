@@ -10,6 +10,9 @@ const MEMBER_TYPE_SIGNAL := "signals";
 const PORT_COLOR_METHOD := Color(0x73f280ff);
 const PORT_COLOR_SIGNAL := Color(0xff786bff);
 
+const ICON_NAME_SIGNAL := "Signal";
+const ICON_NAME_METHOD := "Slot";
+
 const META_NAME_EXTENSION := &"_methods_and_signals_extension";
 
 signal scene_connections_updated();
@@ -23,15 +26,15 @@ func _init(editor : SignalGraphEditor):
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["configure_port_types","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port"];
+	return ["configure_port_types","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port","configure_member_selector"];
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
 	editor.register_port_type(&"method");
 	editor.register_port_type(&"signal");
-	editor.register_port_type(&"add_signal");
-	editor.register_port_type(&"add_method");
 	editor.add_valid_connection_type(editor.port_type(&"signal"), editor.port_type(&"method"));
+	editor.add_valid_connection_type(editor.port_type(&"signal"), editor.port_type(&"wildcard_in"));
+	editor.add_valid_connection_type(editor.port_type(&"wildcard_out"), editor.port_type(&"method"));
 
 func _on_scene_connections_updated() -> void:
 	populate_graph_node_connections();
@@ -80,54 +83,62 @@ func populate_graph_node_connections() -> void:
 ### INTERFACE SIGNALS
 
 func connect_interface_signals() -> void:
-	editor.connection_drag_started.connect(_on_connection_drag_started);
 	editor.connection_request.connect(_on_connection_request);
 	editor.disconnection_request.connect(_on_disconnection_request);
 	editor.connections_changed.connect(_on_connections_changed);
 	
-func _on_connection_drag_started(from_node_name : StringName, from_port : int, is_output : bool) -> void:
-	var node := editor.get_node_or_null(NodePath(from_node_name));
-	if !node: return;
-	
-	var graph_node : GraphNode = node;
-	var slot_type : int;
-	if is_output:
-		slot_type = graph_node.get_output_port_type(from_port);
-	else:
-		slot_type = graph_node.get_input_port_type(from_port);
-		
-	var port_type_add_method := editor.port_type(&"add_method");
-	var port_type_add_signal := editor.port_type(&"add_signal");
-	
-	match slot_type:
-		port_type_add_method:
-			editor.force_connection_drag_end();
-			SignalGraphEditor.Selector.show(graph_node.get_object(), SignalGraphEditor.Selector.TAB_METHODS, Callable(self, &"method_add_requested").bind(graph_node), Callable(self, &"signal_add_requested").bind(graph_node));
-		port_type_add_signal:
-			editor.force_connection_drag_end();
-			SignalGraphEditor.Selector.show(graph_node.get_object(), SignalGraphEditor.Selector.TAB_SIGNALS, Callable(self, &"method_add_requested").bind(graph_node), Callable(self, &"signal_add_requested").bind(graph_node));
-
 func _on_connection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
 	var from_graph_node := editor.get_node(NodePath(from_node_name));
 	var to_graph_node := editor.get_node(NodePath(to_node_name));
 	if !is_instance_of(from_graph_node, SceneObjectGraphNode): return;
 	if !is_instance_of(to_graph_node, SceneObjectGraphNode): return;
 	
-	if (from_graph_node as GraphNode).get_output_port_type(from_port) != editor.port_type(&"signal"): return;
-	if (to_graph_node as GraphNode).get_input_port_type(to_port) != editor.port_type(&"method"): return;
+	var from_port_type := (from_graph_node as GraphNode).get_output_port_type(from_port);
+	var to_port_type := (to_graph_node as GraphNode).get_input_port_type(to_port);
+	var port_pair := [from_port_type, to_port_type];
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
-	var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
-	var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
 	
-	var undo_redo := EditorInterface.get_editor_undo_redo();
-	undo_redo.create_action("Connect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
-	undo_redo.add_do_method(from_object, &"connect", signal_name, callable, CONNECT_PERSIST);
-	undo_redo.add_undo_method(from_object, &"disconnect", signal_name, callable);
-	undo_redo.add_do_method(self, &"notify_scene_connections_updated");
-	undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
-	undo_redo.commit_action();
+	if port_pair == [editor.port_type(&"signal"), editor.port_type(&"method")]:
+		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
+		var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
+		
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Connect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
+		undo_redo.add_do_method(from_object, &"connect", signal_name, callable, CONNECT_PERSIST);
+		undo_redo.add_undo_method(from_object, &"disconnect", signal_name, callable);
+		undo_redo.add_do_method(self, &"notify_scene_connections_updated");
+		undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
+		undo_redo.commit_action();
+	elif port_pair == [editor.port_type(&"wildcard_out"), editor.port_type(&"method")]:
+		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
+		editor.member_selector.show(from_graph_node.object_type, from_object, [MEMBER_TYPE_SIGNAL], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
+			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
+			var signal_name = selected_member;
+			
+			var undo_redo := EditorInterface.get_editor_undo_redo();
+			undo_redo.create_action("Connect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
+			undo_redo.add_do_method(from_object, &"connect", signal_name, callable, CONNECT_PERSIST);
+			undo_redo.add_undo_method(from_object, &"disconnect", signal_name, callable);
+			undo_redo.add_do_method(self, &"notify_scene_connections_updated");
+			undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
+			undo_redo.commit_action();
+		);
+	elif port_pair == [editor.port_type(&"signal"), editor.port_type(&"wildcard_in")]:
+		var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
+		editor.member_selector.show(to_graph_node.object_type, to_object, [MEMBER_TYPE_METHOD], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
+			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
+			var callable := Callable(to_object, selected_member);
+			
+			var undo_redo := EditorInterface.get_editor_undo_redo();
+			undo_redo.create_action("Connect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
+			undo_redo.add_do_method(from_object, &"connect", signal_name, callable, CONNECT_PERSIST);
+			undo_redo.add_undo_method(from_object, &"disconnect", signal_name, callable);
+			undo_redo.add_do_method(self, &"notify_scene_connections_updated");
+			undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
+			undo_redo.commit_action();
+		);
 
 func _on_disconnection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
 	var from_graph_node := editor.get_node(NodePath(from_node_name));
@@ -169,6 +180,94 @@ func _on_connections_changed() -> void:
 		if !is_instance_of(child, SceneObjectGraphNode):
 			continue;
 		(child.get_meta(META_NAME_EXTENSION, null) as SceneObjectGraphNodeExtension).update_connection_cache();
+
+# CAPABILITY: configure_member_selector
+func get_member_selector_member_types() -> Array[String]:
+	return [MEMBER_TYPE_METHOD, MEMBER_TYPE_SIGNAL];
+
+func get_member_selector_tab_info(member_type : String) -> Dictionary:
+	match member_type:
+		MEMBER_TYPE_METHOD:
+			return {
+				"label": "Methods",
+				"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_METHOD, &"EditorIcons"),
+				"is_input": true
+			};
+		MEMBER_TYPE_SIGNAL:
+			return {
+				"label": "Signals",
+				"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_SIGNAL, &"EditorIcons"),
+				"is_output": true
+			};
+	return {};
+
+func get_member_selector_member_list(object_type : String, obj : Object, member_type : String) -> Array[Dictionary]:
+	var members : Array = [];
+	match member_type:
+		MEMBER_TYPE_METHOD:
+			members.append_array(_collect_members(obj, &"get_script_method_list", &"class_get_method_list", &"get_method_list"));
+			members = members.map(func (method_info : Dictionary) -> Dictionary:
+				return {
+					"member_type": MEMBER_TYPE_METHOD,
+					"member_name": method_info.name,
+					"label": Utility.get_method_signature_text(method_info),
+					"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_METHOD, &"EditorIcons")
+				}
+			);
+		MEMBER_TYPE_SIGNAL:
+			members.append_array(_collect_members(obj, &"get_script_signal_list", &"class_get_signal_list", &"get_signal_list"));
+			members = members.map(func (signal_info : Dictionary) -> Dictionary:
+				return {
+					"member_type": MEMBER_TYPE_SIGNAL,
+					"member_name": signal_info.name,
+					"label": Utility.get_method_signature_text(signal_info),
+					"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_SIGNAL, &"EditorIcons")
+				}
+			);
+	
+	return members;
+
+	
+func _collect_members(obj : Object, script_getter : StringName, class_getter : StringName, instance_getter : StringName) -> Array:
+	var list : Array = [];
+	var name_list : Array[StringName] = [];
+	
+	# Add members by script
+	var script : Script = obj.get_script();
+	while script != null && script_getter != null:
+		if script.has_method(script_getter):
+			for def in script.call(script_getter):
+				var name : StringName = def["name"];
+				if name_list.has(name):
+					continue;
+				name_list.push_back(name);
+				list.push_back(def);
+		script = script.get_base_script();
+	
+	# Add members by class
+	var cls_name := obj.get_class();
+	while cls_name && class_getter != null:
+		if ClassDB.has_method(class_getter):
+			for def in ClassDB.call(class_getter, cls_name):
+				var name : StringName = def["name"];
+				if name_list.has(name):
+					continue;
+				name_list.push_back(name);
+				list.push_back(def);
+		cls_name = ClassDB.get_parent_class(cls_name);
+	
+	# Add dynamic signals and methods for this specific node
+	if instance_getter && obj.has_method(instance_getter):
+		var insertion_index := 0;
+		for def in obj.call(instance_getter):
+			var name : StringName = def["name"];
+			if name_list.has(name):
+				continue;
+			name_list.push_back(name);
+			list.insert(insertion_index, def);
+			insertion_index += 1;
+	
+	return list;
 		
 # CAPABILITY: initialize_object_graph_node
 func initialize_object_graph_node(graph_node : GraphNode) -> void:
@@ -182,32 +281,48 @@ func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]
 func draw_object_graph_node_port(graph_node : GraphNode, slot_index: int, position: Vector2i, left: bool, color: Color) -> bool:
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).draw_port(slot_index, position, left, color);
 
+class Utility extends RefCounted:
+	static func get_method_signature_text(info : Dictionary) -> String:
+		var args : Array = info["args"];
+		var raw_defaults = info["default_args"];
+		var defaults : Array = raw_defaults as Array if raw_defaults != null else [];
+		var s := "";
+		s += info["name"] as String;
+		s += "(";
+		for i in range(args.size()):
+			var arg : Dictionary = args[i];
+			if i != 0:
+				s += ", ";
+			
+			s += arg["name"] as String;
+			s += ": ";
+			var type : Variant.Type = arg["type"];
+			if type == TYPE_OBJECT:
+				s += arg["class_name"] as String;
+			elif type == TYPE_NIL:
+				s += "Variant";
+			else:
+				s += type_string(type);
+			
+			if defaults:
+				var arg_index := i - (args.size() - defaults.size());
+				var default_value = defaults[arg_index] if arg_index >= 0 && arg_index < defaults.size() else null;
+				if default_value != null:
+					s += " = ";
+					s += str(default_value);
+		
+		s += ")"; 
+		return s;
+
 class SceneObjectGraphNodeExtension extends RefCounted:
 	var graph_node : GraphNode;
 	var editor : SignalGraphEditor;
 	var hook : Object;
 	
-	var _collapsible_panel : Control;
-	
 	func _init(graph_node : GraphNode, editor : SignalGraphEditor, hook : Object) -> void:
 		self.graph_node = graph_node;
 		self.editor = editor;
 		self.hook = hook;
-		
-		graph_node.node_selected.connect(_on_node_selected);
-		graph_node.node_deselected.connect(_on_node_deselected);
-	
-	func _on_node_selected() -> void:
-		_collapsible_panel.visible = graph_node.selected && graph_node.get_rect().has_point(editor.get_local_mouse_position());
-		graph_node.reset_size();
-	
-	func _update_collapsible_panel_visibility():
-		_collapsible_panel.visible = graph_node.selected;
-		graph_node.reset_size();
-	
-	func _on_node_deselected() -> void:
-		_collapsible_panel.visible = false;
-		graph_node.reset_size();
 	
 	func create_object_graph_node_slots() -> Array[Dictionary]:
 		var created : Array[Dictionary] = [];
@@ -244,8 +359,6 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			
 			created.append(slot);
 		
-		created.append(create_collapsible_panel());
-		
 		return created;
 	
 	static func get_signal_info_by_name(obj : Object, signal_name : StringName) -> Dictionary:
@@ -273,8 +386,8 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 				continue;
 			seen_method_names.append(method_name);
 			
-			var cell_control := _create_cell(method_name, SignalGraphEditor.ICON_NAME_METHOD, HORIZONTAL_ALIGNMENT_LEFT);
-			cell_control.tooltip_text = "Method: " + SignalGraphEditor.Utility.get_method_signature_text(method_info);
+			var cell_control := _create_cell(method_name, ICON_NAME_METHOD, HORIZONTAL_ALIGNMENT_LEFT);
+			cell_control.tooltip_text = "Method: " + Utility.get_method_signature_text(method_info);
 			
 			created.append({
 				"control": cell_control,
@@ -299,8 +412,8 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 				print("No signal found for name '" + signal_name + "' in object " + str(obj));
 				continue;
 			
-			var cell_control := _create_cell(signal_name, SignalGraphEditor.ICON_NAME_SIGNAL, HORIZONTAL_ALIGNMENT_RIGHT);
-			cell_control.tooltip_text = "Signal: " + SignalGraphEditor.Utility.get_method_signature_text(signal_info);
+			var cell_control := _create_cell(signal_name, ICON_NAME_SIGNAL, HORIZONTAL_ALIGNMENT_RIGHT);
+			cell_control.tooltip_text = "Signal: " + Utility.get_method_signature_text(signal_info);
 			
 			created.append({
 				"control": cell_control,
@@ -343,35 +456,6 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			var control := Control.new();
 			control.custom_minimum_size = Vector2(height, height);
 			return control;
-	
-	func create_collapsible_panel() -> Dictionary:
-		if is_instance_valid(_collapsible_panel):
-			_collapsible_panel.queue_free();
-			_collapsible_panel = null;
-		
-		_collapsible_panel = VBoxContainer.new();
-		var add_button := Button.new();
-		add_button.text = "+";
-		add_button.pressed.connect(_on_add_button_pressed);
-		_collapsible_panel.add_child(add_button);
-		
-		_update_collapsible_panel_visibility();
-		
-		return {
-			"control": _collapsible_panel,
-			"sort_key": INT32_MAX,
-			"left_port": {
-				"port_type": editor.port_type(&"add_method"),
-				"port_color": PORT_COLOR_METHOD
-			},
-			"right_port": {
-				"port_type": editor.port_type(&"add_signal"),
-				"port_color": PORT_COLOR_SIGNAL
-			}
-		};
-	
-	func _on_add_button_pressed() -> void:
-		SignalGraphEditor.Selector.show(graph_node.get_object(), -1, hook.method_add_requested.bind(graph_node), hook.signal_add_requested.bind(graph_node));
 	
 	func draw_port(slot_index: int, position: Vector2i, left: bool, color: Color) -> bool:
 		# Draw connection line not in view

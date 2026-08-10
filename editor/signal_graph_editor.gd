@@ -2,9 +2,6 @@
 class_name SignalGraphEditor
 extends GraphEdit
 
-const ICON_NAME_SIGNAL := "Signal";
-const ICON_NAME_METHOD := "Slot";
-
 signal connections_changed();
 signal selection_changed();
 signal view_updated();
@@ -17,7 +14,7 @@ var selected_nodes : Array[StringName] = [];
 var dragging : bool = false;
 
 var interface_signals : InterfaceSignals;
-var utility : Utility;
+var member_selector : MemberSelector;
 var hooks : Hooks;
 
 var current_view : SignalGraphView:
@@ -40,7 +37,7 @@ var _pending_rearrange_after_load := false;
 
 func _init():
 	interface_signals = InterfaceSignals.new(self);
-	utility = Utility.new(self);
+	member_selector = MemberSelector.new(self);
 	
 	connections_layer = get_node(^"_connection_layer");
 	hooks = Hooks.new(self);
@@ -202,8 +199,8 @@ func local_to_graph_position(position : Vector2) -> Vector2:
 	return (position + scroll_offset) / zoom;
 
 func check_connection_port_types(connection : Dictionary, from_port_type : int, to_port_type : int) -> bool:
-	var from_graph_node := get_node(NodePath(connection.from_node));
-	var to_graph_node := get_node(NodePath(connection.to_node));
+	var from_graph_node := get_node_or_null(NodePath(connection.from_node));
+	var to_graph_node := get_node_or_null(NodePath(connection.to_node));
 	
 	if !from_graph_node: return false;
 	if !to_graph_node: return false;
@@ -270,6 +267,14 @@ class Hooks extends RefCounted:
 			],
 			"hooks": [] as Array[Object]
 		},
+		"configure_member_selector": {
+			"required_methods": [
+				&"get_member_selector_member_types",
+				&"get_member_selector_tab_info",
+				&"get_member_selector_member_list"
+			],
+			"hooks": [] as Array[Object]
+		},
 		
 		"view_rule.object_source": {
 			"required_methods": [
@@ -312,7 +317,7 @@ class Hooks extends RefCounted:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/connection_flag_editing.gd"));
 		
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/nodes.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_with_connections.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/connected_methods_and_signals.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_by_name.gd"));
 		
 	func add_hook(script : Script) -> bool:
@@ -406,32 +411,86 @@ class Hooks extends RefCounted:
 			return _capabilities[property as String].hooks;
 		return null;
 	
-class Selector extends RefCounted:
-	const TAB_METHODS := 0;
-	const TAB_SIGNALS := 1;
-	static var _last_selected_tab_index := TAB_METHODS;
+class MemberSelector extends RefCounted:
+	var _last_selected_member_type := "";
 	
-	static var _active : Dictionary;
+	var all_member_types;
+	var all_input_member_types;
+	var all_output_member_types;
 	
-	static func show(obj : Object, force_start_tab : int, method_callback : Callable, signal_callback : Callable) -> void:
+	var _active : Dictionary;
+	var _member_lists_by_type : Dictionary;
+	
+	var editor : SignalGraphEditor;
+	
+	func _init(editor : SignalGraphEditor):
+		self.editor = editor;
+	
+	func get_all_member_types() -> Array[String]:
+		if all_member_types: return all_member_types;
+		all_member_types = [] as Array[String];
+		
+		for hook in editor.hooks.configure_member_selector:
+			for member_type in hook.get_member_selector_member_types():
+				if !all_member_types.has(member_type): all_member_types.append(member_type);
+				
+		return all_member_types;
+	
+	func get_all_input_member_types() -> Array[String]:
+		if all_input_member_types: return all_input_member_types;
+		all_input_member_types = [] as Array[String];
+		
+		for hook in editor.hooks.configure_member_selector:
+			for member_type in hook.get_member_selector_member_types():
+				if hook.get_member_selector_tab_info(member_type).get("is_input", false):
+					if !all_input_member_types.has(member_type): all_input_member_types.append(member_type);
+				
+		return all_input_member_types;
+	
+	func get_all_output_member_types() -> Array[String]:
+		if all_output_member_types: return all_output_member_types;
+		all_output_member_types = [] as Array[String];
+		
+		for hook in editor.hooks.configure_member_selector:
+			for member_type in hook.get_member_selector_member_types():
+				if hook.get_member_selector_tab_info(member_type).get("is_output", false):
+					if !all_output_member_types.has(member_type): all_output_member_types.append(member_type);
+				
+		return all_output_member_types;
+	
+	func show(object_type : String, obj : Object, member_types : Array[String], member_callback : Callable) -> void:
 		if !obj:
 			return;
 			
-		if force_start_tab < 0:
-			force_start_tab = _last_selected_tab_index;
-		_last_selected_tab_index = force_start_tab;
+		if !member_types: return;
+		member_types = member_types.filter(func (member_type : String) -> bool:
+			for hook in editor.hooks.configure_member_selector:
+				if hook.get_member_selector_member_types().has(member_type):
+					return true;
+			printerr("No hook is capable of configuring member type '" + member_type + "' for the member selector.");
+			return false;
+		);
+		if !member_types: return;
 		
-		_active = create_signal_method_selector(force_start_tab);
+		var force_start_tab := member_types[0];
+		
+		_active = _create_member_selector(member_types, force_start_tab);
 		var dialog : ConfirmationDialog = _active["dialog"];
 		var search_bar : LineEdit = _active["search_bar"];
 		var tree : Tree = _active["tree"];
 		var tab_group : ButtonGroup = _active["tab_group"];
 		
-		_active["method_list"] = collect_members(obj, &"get_script_method_list", &"class_get_method_list", &"get_method_list");
-		_active["signal_list"] = collect_members(obj, &"get_script_signal_list", &"class_get_signal_list", &"get_signal_list");
+		_active["object_type"] = object_type;
+		_active["obj"] = obj;
+		_active["member_types"] = member_types;
+		_active["member_callback"] = member_callback;
 		
-		_active["method_callback"] = method_callback;
-		_active["signal_callback"] = signal_callback;
+		_member_lists_by_type.clear()
+		for member_type in member_types:
+			for hook in editor.hooks.configure_member_selector:
+				if hook.get_member_selector_member_types().has(member_type):
+					_member_lists_by_type[member_type] = hook.get_member_selector_member_list(object_type, obj, member_type) as Array;
+					break;
 		
 		tree.item_selected.connect(_on_selection_changed);
 		tree.item_activated.connect(_tree_on_item_activated);
@@ -446,80 +505,56 @@ class Selector extends RefCounted:
 		dialog.visible = false;
 		EditorInterface.popup_dialog_centered(dialog);
 	
-	static func _populate_tree(filter : String) -> void:
-		var dialog : ConfirmationDialog = _active["dialog"];
+	func _populate_tree(filter : String) -> void:
 		var tree : Tree = _active["tree"];
 		var tab_group : ButtonGroup = _active["tab_group"];
-		var method_list : Array[Dictionary] = _active["method_list"];
-		var signal_list : Array[Dictionary] = _active["signal_list"];
-		var theme := dialog.theme;
 		
-		# Handles are Vector2is where:
-		# x is tab index (0/1 for methods/signals)
-		# y is method or signal index within the list
+		# Handles are Dictionaries with:
+		# member_type (String)
+		# member_name (StringName)
 		# They're used in tree item metadata to keep a reference to where they came from
 		
 		# Grab the handle of the last selected entry, before we clear it and reapply the filter, so we can reselect it later.
-		var selected_handle : Vector2i = tree.get_selected().get_metadata(0) if tree.get_selected() else Vector2i(-1, 0);
+		var selected_handle : Dictionary = tree.get_selected().get_metadata(0) if tree.get_selected() else {};
 		
 		tree.clear();
 		
 		var root := tree.create_item();
 		
-		var selected_tab := tab_group.get_pressed_button().get_index();
+		var selected_member_type : String = tab_group.get_pressed_button().get_meta(&"member_type",_active["member_types"][0]);
+		var member_list : Array = _member_lists_by_type.get(selected_member_type);
+		var list_root := tree.create_item(root);
+		list_root.set_text(0, tab_group.get_pressed_button().text);
 		
-		match selected_tab:
-			TAB_METHODS:
-				var method_root := tree.create_item(root);
-				method_root.set_text(0, "Methods");
-				
-				for method_index in range(method_list.size()):
-					var handle := Vector2i(TAB_METHODS, method_index);
-					
-					var method_info := method_list[method_index];
-					var text := Utility.get_method_signature_text(method_info);
-					
-					if filter && !filter.is_subsequence_ofn(text):
-						continue;
-					
-					var item := tree.create_item(method_root);
-					item.set_icon(0, theme.get_icon(ICON_NAME_METHOD, "EditorIcons"));
-					item.set_text(0, text);
-					item.set_metadata(0, handle);
-					if selected_handle == handle:
-						item.select(0);
-				pass;
-			TAB_SIGNALS:
-				var signal_root := tree.create_item(root);
-				signal_root.set_text(0, "Signals");
-				
-				for signal_index in range(signal_list.size()):
-					var handle := Vector2i(TAB_SIGNALS, signal_index);
-					
-					var signal_info := signal_list[signal_index];
-					var text := Utility.get_method_signature_text(signal_info);
-					
-					if filter && !filter.is_subsequence_ofn(text):
-						continue;
-					
-					var item := tree.create_item(signal_root);
-					item.set_icon(0, theme.get_icon(ICON_NAME_SIGNAL, "EditorIcons"));
-					item.set_text(0, text);
-					item.set_metadata(0, handle);
-					if selected_handle == handle:
-						item.select(0);
-				pass;
-				
+		for member_index in range(member_list.size()):
+			var member_info : Dictionary = member_list[member_index];
+			var handle := {
+				"member_type": selected_member_type,
+				"member_name": member_info.member_name as StringName
+			};
+			
+			var label : String = member_info.label;
+			
+			if filter && !filter.is_subsequence_ofn(label):
+				continue;
+			
+			var item := tree.create_item(list_root);
+			item.set_icon(0, member_info.get("icon"));
+			item.set_text(0, member_info.get("label"));
+			item.set_metadata(0, handle);
+			if selected_handle == handle:
+				item.select(0);
+		
 		_on_selection_changed();
 		
-	static func _on_selection_changed() -> void:
+	func _on_selection_changed() -> void:
 		var dialog : ConfirmationDialog = _active["dialog"];
 		var tree : Tree = _active["tree"];
 		if !dialog || !tree:
 			return;
 		dialog.get_ok_button().disabled = tree.get_selected() == null;
 	
-	static func _tree_on_item_activated() -> void:
+	func _tree_on_item_activated() -> void:
 		var dialog : ConfirmationDialog = _active["dialog"];
 		var tree : Tree = _active["tree"];
 		if !dialog || !tree:
@@ -528,38 +563,27 @@ class Selector extends RefCounted:
 		if !dialog.get_ok_button().disabled:
 			_on_submitted();
 	
-	static func _on_tab_group_pressed(btn : BaseButton) -> void:
+	func _on_tab_group_pressed(btn : BaseButton) -> void:
 		var search_bar : LineEdit = _active["search_bar"];
-		_last_selected_tab_index = btn.get_index();
+		_last_selected_member_type = btn.get_meta(&"member_type",&"");
 		_populate_tree(search_bar.text);
 		
-	static func _on_submitted() -> void:
+	func _on_submitted() -> void:
 		var dialog : ConfirmationDialog = _active["dialog"];
 		var tree : Tree = _active["tree"];
 		
-		var method_list : Array[Dictionary] = _active["method_list"];
-		var signal_list : Array[Dictionary] = _active["signal_list"];
+		var selected_handle : Dictionary = tree.get_selected().get_metadata(0) if tree.get_selected() else {};
+		var member_type : String = selected_handle.member_type;
+		var member_name : StringName = selected_handle.member_name;
 		
-		var selected_handle : Vector2i = tree.get_selected().get_metadata(0) if tree.get_selected() else Vector2i(-1, 0);
-		var selected_tab : int = selected_handle.x;
-		var selected_index : int = selected_handle.y;
+		var member_callback : Callable = _active["member_callback"];
 		
-		var method_callback : Callable = _active["method_callback"];
-		var signal_callback : Callable = _active["signal_callback"];
-		
-		match selected_tab:
-			TAB_METHODS:
-				var method_info := method_list[selected_index];
-				if method_callback.is_valid():
-					method_callback.call(method_info);
-			TAB_SIGNALS:
-				var signal_info := signal_list[selected_index];
-				if signal_callback.is_valid():
-					signal_callback.call(signal_info);
+		if member_callback.is_valid():
+			member_callback.call(_active["object_type"], _active["obj"], member_type, member_name);
 		
 		dialog.queue_free();
 		
-	static func create_signal_method_selector(force_start_tab : int) -> Dictionary:
+	func _create_member_selector(member_types : Array[String], force_start_tab : String) -> Dictionary:
 		var output : Dictionary = {
 			"dialog": null,
 			"search_bar": null,
@@ -578,25 +602,23 @@ class Selector extends RefCounted:
 		var tab_row : Container = dialog.get_node("%Tab Row");
 		var tab_group := ButtonGroup.new();
 		output["tab_group"] = tab_group;
-		var methods_button := Button.new();
-		methods_button.text = "Methods";
-		methods_button.button_group = tab_group;
-		methods_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
-		methods_button.icon = theme.get_icon(ICON_NAME_METHOD, "EditorIcons");
-		methods_button.toggle_mode = true;
-		methods_button.button_pressed = force_start_tab == TAB_METHODS;
-		methods_button.theme_type_variation = "FlatMenuButton";
-		var signals_button := Button.new();
-		signals_button.text = "Signals";
-		signals_button.button_group = tab_group;
-		signals_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
-		signals_button.icon = theme.get_icon(ICON_NAME_SIGNAL, "EditorIcons");
-		signals_button.toggle_mode = true;
-		signals_button.button_pressed = force_start_tab == TAB_SIGNALS;
-		signals_button.theme_type_variation = "FlatMenuButton";
-		
-		tab_row.add_child(methods_button);
-		tab_row.add_child(signals_button);
+		for member_type in member_types:
+			var tab_info : Dictionary;
+			for hook in editor.hooks.configure_member_selector:
+				if hook.get_member_selector_member_types().has(member_type):
+					tab_info = hook.get_member_selector_tab_info(member_type);
+					if tab_info: break;
+			if !tab_info: continue;
+			var tab_button := Button.new();
+			tab_button.text = tab_info.label;
+			tab_button.button_group = tab_group;
+			tab_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+			tab_button.icon = tab_info.icon;
+			tab_button.toggle_mode = true;
+			tab_button.button_pressed = member_type == force_start_tab;
+			tab_button.theme_type_variation = "FlatMenuButton";
+			tab_button.set_meta(&"member_type", member_type);
+			tab_row.add_child(tab_button);
 		
 		# Search Bar
 		
@@ -611,88 +633,10 @@ class Selector extends RefCounted:
 		dialog.close_requested.connect(dialog.queue_free);
 		
 		return output;
-	
-	static func collect_members(obj : Object, script_getter : StringName, class_getter : StringName, instance_getter : StringName) -> Array[Dictionary]:
-		var list : Array[Dictionary] = [];
-		var name_list : Array[StringName] = [];
-		
-		# Add members by script
-		var script : Script = obj.get_script();
-		while script != null && script_getter != null:
-			if script.has_method(script_getter):
-				for def in script.call(script_getter):
-					var name : StringName = def["name"];
-					if name_list.has(name):
-						continue;
-					name_list.push_back(name);
-					list.push_back(def);
-			script = script.get_base_script();
-		
-		# Add members by class
-		var cls_name := obj.get_class();
-		while cls_name && class_getter != null:
-			if ClassDB.has_method(class_getter):
-				for def in ClassDB.call(class_getter, cls_name):
-					var name : StringName = def["name"];
-					if name_list.has(name):
-						continue;
-					name_list.push_back(name);
-					list.push_back(def);
-			cls_name = ClassDB.get_parent_class(cls_name);
-		
-		# Add dynamic signals and methods for this specific node
-		if instance_getter && obj.has_method(instance_getter):
-			var insertion_index := 0;
-			for def in obj.call(instance_getter):
-				var name : StringName = def["name"];
-				if name_list.has(name):
-					continue;
-				name_list.push_back(name);
-				list.insert(insertion_index, def);
-				insertion_index += 1;
-		
-		return list;
 
 
 ### UTILITY
 class Utility extends RefCounted:
-	var editor : SignalGraphEditor;
-	
-	func _init(editor : SignalGraphEditor):
-		self.editor = editor;
-	
-	static func get_method_signature_text(info : Dictionary) -> String:
-		var args : Array = info["args"];
-		var raw_defaults = info["default_args"];
-		var defaults : Array = raw_defaults as Array if raw_defaults != null else [];
-		var s := "";
-		s += info["name"] as String;
-		s += "(";
-		for i in range(args.size()):
-			var arg : Dictionary = args[i];
-			if i != 0:
-				s += ", ";
-			
-			s += arg["name"] as String;
-			s += ": ";
-			var type : Variant.Type = arg["type"];
-			if type == TYPE_OBJECT:
-				s += arg["class_name"] as String;
-			elif type == TYPE_NIL:
-				s += "Variant";
-			else:
-				s += type_string(type);
-			
-			if defaults:
-				var arg_index := i - (args.size() - defaults.size());
-				var default_value = defaults[arg_index] if arg_index >= 0 && arg_index < defaults.size() else null;
-				if default_value != null:
-					s += " = ";
-					s += str(default_value);
-		
-		s += ")"; 
-		return s;
-	
 	static func get_object_icon(obj: Object) -> Texture2D:
 		if obj == null:
 			return null;

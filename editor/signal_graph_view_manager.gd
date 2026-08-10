@@ -288,7 +288,7 @@ func create_default_view() -> Dictionary:
 			],
 			"member_source": [
 				{
-					"id": "signal_graphs:members_with_connections",
+					"id": "signal_graphs:connected_methods_and_signals",
 					"params": {}
 				}
 			]

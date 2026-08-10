@@ -60,6 +60,7 @@ func rebuild_contents_from_view() -> void:
 		child.queue_free();
 	
 	create_and_add_contents();
+	reset_size();
 
 func create_and_add_contents() -> void:
 	var slots_to_add : Array[Dictionary]= [];

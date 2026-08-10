@@ -13,7 +13,7 @@ func get_signal_graph_capabilities() -> Array[String]:
 	return ["view_rule.member_source"];
 
 func get_view_rule_id() -> String:
-	return "signal_graphs:members_with_connections";
+	return "signal_graphs:connected_methods_and_signals";
 
 func get_view_rule_label(params : Variant) -> String:
 	return "Connected methods/signals";

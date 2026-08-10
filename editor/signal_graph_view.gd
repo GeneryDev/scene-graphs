@@ -246,7 +246,9 @@ func update_object_member_views_with_rules(object_type : String, obj : Object) -
 	for member in members:
 		var member_type : String = member.member_type;
 		var member_name : StringName = member.member_name;
-		add_object_view_member(object_type, obj, member_type, member_name);
+		var entry_object_type : String = member.get("object_type", object_type);
+		var entry_object : Object = member.get("object", obj);
+		add_object_view_member(entry_object_type, entry_object, member_type, member_name);
 
 func generate_object_member_list_with_rules(object_type : String, obj : Object) -> Array:
 	var generated_members := [];
@@ -275,7 +277,11 @@ func update_all_object_member_views_with_rules() -> void:
 				for member in members:
 					var member_type : String = member.member_type;
 					var member_name : String = member.member_name;
-					add_object_view_member(object_type, obj, member_type, member_name);
+					var entry_object_type : String = member.get("object_type", object_type);
+					var entry_object : Object = member.get("object", obj);
+					if !has_object_view(entry_object_type, entry_object):
+						add_object_view(entry_object_type, entry_object);
+					add_object_view_member(entry_object_type, entry_object, member_type, member_name);
 
 func get_scene_object_count() -> int:
 	var total := 0;

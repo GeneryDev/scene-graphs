@@ -2,7 +2,7 @@
 
 [node name="Member Selector" type="ConfirmationDialog" unique_id=528744520]
 oversampling_override = 1.0
-title = "Select Method/Signal"
+title = "Select Member"
 position = Vector2i(0, 36)
 size = Vector2i(500, 400)
 visible = true
