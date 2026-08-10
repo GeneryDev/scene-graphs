@@ -91,11 +91,13 @@ func _get_plugin_icon() -> Texture2D:
 
 class Settings extends RefCounted:
 	const PROJECT_SETTING_PLUGIN_MODE := &"signal_graphs/editor/plugin_mode";
-	const PROJECT_SETTING_HOOK_SCRIPTS := &"signal_graphs/hooks/hook_scripts";
-	const ALL_PROJECT_SETTINGS := [PROJECT_SETTING_PLUGIN_MODE, PROJECT_SETTING_HOOK_SCRIPTS];
+	const PROJECT_SETTING_HOOK_SCRIPTS := &"signal_graphs/editor/hook_scripts";
+	const PROJECT_SETTING_DEV_MODE := &"signal_graphs/editor/dev_mode";
+	const ALL_PROJECT_SETTINGS := [PROJECT_SETTING_PLUGIN_MODE, PROJECT_SETTING_HOOK_SCRIPTS, PROJECT_SETTING_DEV_MODE];
 	
 	signal plugin_mode_changed(mode : PluginMode);
 	signal hook_scripts_changed(hook_scripts : Array[String]);
+	signal dev_mode_changed(enabled : bool);
 	
 	var plugin : EditorPlugin;
 	
@@ -109,6 +111,11 @@ class Settings extends RefCounted:
 			if !ProjectSettings.has_setting(PROJECT_SETTING_HOOK_SCRIPTS):
 				return [] as Array[String];
 			return ProjectSettings.get_setting(PROJECT_SETTING_HOOK_SCRIPTS);
+	var dev_mode : bool:
+		get:
+			if !ProjectSettings.has_setting(PROJECT_SETTING_DEV_MODE):
+				return false;
+			return ProjectSettings.get_setting(PROJECT_SETTING_DEV_MODE);
 	
 	var _last_used_settings : Dictionary;
 	
@@ -140,6 +147,17 @@ class Settings extends RefCounted:
 			"hint_string": "{0}/{1}:*.gd,*.cs".format([TYPE_STRING,PROPERTY_HINT_FILE])
 		});
 		ProjectSettings.set_initial_value(PROJECT_SETTING_HOOK_SCRIPTS, [] as Array[String]);
+		
+		# Dev Mode
+		if !ProjectSettings.get_setting(PROJECT_SETTING_DEV_MODE):
+			ProjectSettings.set_setting(PROJECT_SETTING_DEV_MODE, false);
+		ProjectSettings.add_property_info({
+			"name": PROJECT_SETTING_DEV_MODE,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+			"hint_string": ""
+		});
+		ProjectSettings.set_initial_value(PROJECT_SETTING_DEV_MODE, false);
 	
 	func _on_project_settings_changed() -> void:
 		for key in ALL_PROJECT_SETTINGS:
@@ -161,6 +179,9 @@ class Settings extends RefCounted:
 				plugin.reload();
 			PROJECT_SETTING_HOOK_SCRIPTS:
 				hook_scripts_changed.emit(value);
+				plugin.reload();
+			PROJECT_SETTING_DEV_MODE:
+				dev_mode_changed.emit(value);
 				plugin.reload();
 
 class Persistence extends RefCounted:

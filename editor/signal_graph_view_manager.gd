@@ -88,10 +88,6 @@ func _enter_tree() -> void:
 		var metadata = view_dropdown.get_item_metadata(selected_index);
 		activate_view(metadata);
 	);
-
-func _test_save() -> void:
-	print("test save");
-	print(var_to_str(store_scene_state()));
 	
 func store_scene_state() -> Dictionary:
 	var serialized_scene_state := {
