@@ -26,8 +26,8 @@ func setup(editor : SignalGraphEditor, graph_connections : Array) -> void:
 		
 		var from_object : Object = from_graph_node.get_object();
 		var to_object : Object = to_graph_node.get_object();
-		var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, graph_connection.from_port).member_name;
-		var method_name : StringName = to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, graph_connection.to_port).member_name;
+		var signal_name : StringName = from_graph_node.get_member_from_port_id(graph_connection.from_port, MEMBER_TYPE_SIGNAL).member_name;
+		var method_name : StringName = to_graph_node.get_member_from_port_id(graph_connection.to_port, MEMBER_TYPE_METHOD).member_name;
 		
 		var signal_connection : Dictionary;
 		var flags : ConnectFlags;

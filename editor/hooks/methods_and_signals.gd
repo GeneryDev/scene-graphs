@@ -115,8 +115,8 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	var to_object : Object = to_graph_node.get_object();
 	
 	if port_pair == [editor.port_type(&"signal"), editor.port_type(&"method")]:
-		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
-		var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
+		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_METHOD).member_name);
+		var signal_name : StringName = from_graph_node.get_member_from_port_id(from_port, MEMBER_TYPE_SIGNAL).member_name;
 		
 		var undo_redo := EditorInterface.get_editor_undo_redo();
 		undo_redo.create_action("Connect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
@@ -126,7 +126,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 		undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
 		undo_redo.commit_action();
 	elif port_pair == [editor.port_type(&"wildcard_out"), editor.port_type(&"method")]:
-		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
+		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_METHOD).member_name);
 		editor.member_selector.show(from_graph_node.object_type, from_object, [MEMBER_TYPE_SIGNAL], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
 			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
 			var signal_name = selected_member;
@@ -140,7 +140,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 			undo_redo.commit_action();
 		);
 	elif port_pair == [editor.port_type(&"signal"), editor.port_type(&"wildcard_in")]:
-		var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
+		var signal_name : StringName = from_graph_node.get_member_from_port_id(from_port, MEMBER_TYPE_SIGNAL).member_name;
 		editor.member_selector.show(to_graph_node.object_type, to_object, [MEMBER_TYPE_METHOD], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
 			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
 			var callable := Callable(to_object, selected_member);
@@ -165,8 +165,8 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
-	var callable := Callable(to_object, to_graph_node.get_member_from_port_id(MEMBER_TYPE_METHOD, to_port).member_name);
-	var signal_name : StringName = from_graph_node.get_member_from_port_id(MEMBER_TYPE_SIGNAL, from_port).member_name;
+	var callable := Callable(to_object, to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_METHOD).member_name);
+	var signal_name : StringName = from_graph_node.get_member_from_port_id(from_port, MEMBER_TYPE_SIGNAL).member_name;
 	var flags := ConnectFlags.CONNECT_PERSIST;
 	for connection in from_object.get_signal_connection_list(signal_name):
 		var connection_callable := connection["callable"] as Callable;
@@ -475,7 +475,7 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		# Draw connection line not in view
 		var searching_member_type := MEMBER_TYPE_METHOD if left else MEMBER_TYPE_SIGNAL;
 		var searching_port_type := editor.port_type(&"method") if left else editor.port_type(&"signal");
-		var searching_slot_member_name : StringName = graph_node.get_member_from_slot_id(searching_member_type,slot_index).get("member_name",&"");
+		var searching_slot_member_name : StringName = graph_node.get_member_from_slot_id(slot_index, searching_member_type).get("member_name",&"");
 		var found_connection_index : int = _connections_not_in_view.find_custom(func (c : Dictionary) -> bool:
 			return c.port_type == searching_port_type && c.member_name == searching_slot_member_name;
 		);

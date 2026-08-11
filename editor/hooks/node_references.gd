@@ -111,7 +111,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
 	
-	var property_name : StringName = to_graph_node.get_member_from_port_id(MEMBER_TYPE_PROPERTY, to_port).member_name;
+	var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
 	var property_info := get_property_info_by_name(to_object, property_name);
 	var new_value : Variant = null;
 	if property_info.type == TYPE_NODE_PATH:
@@ -138,7 +138,7 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	
 	var to_object : Object = to_graph_node.get_object();
 	
-	var property_name : StringName = to_graph_node.get_member_from_port_id(MEMBER_TYPE_PROPERTY, to_port).member_name;
+	var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
 	var property_info := get_property_info_by_name(to_object, property_name);
 	var new_value : Variant = null;
 	if property_info.type == TYPE_NODE_PATH:

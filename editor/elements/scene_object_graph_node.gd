@@ -149,15 +149,24 @@ func get_member_port_id(member_type : String, member_name : StringName) -> int:
 func get_member_slot_id(member_type : String, member_name : StringName) -> int:
 	return get_member_cache(member_type, member_name).get("slot_id", -1);
 
-func get_member_from_port_id(member_type : String, port_id : int) -> Dictionary:
-	if !_member_cache.has(member_type): return {};
-	for member_name in _member_cache[member_type]:
-		var member : Dictionary = _member_cache[member_type][member_name];
-		if member["port_id"] == port_id:
-			return member;
+func get_member_from_port_id(port_id : int, member_type : String = "") -> Dictionary:
+	if member_type:
+		# Search for a specific member type
+		if !_member_cache.has(member_type): return {};
+		for member_name in _member_cache[member_type]:
+			var member : Dictionary = _member_cache[member_type][member_name];
+			if member["port_id"] == port_id:
+				return member;
+	else:
+		# Search for all member types
+		for entry_member_type in _member_cache:
+			for member_name in _member_cache[entry_member_type]:
+				var member : Dictionary = _member_cache[entry_member_type][member_name];
+				if member["port_id"] == port_id:
+					return member;
 	return {};
 
-func get_member_from_slot_id(member_type : String, slot_id : int) -> Dictionary:
+func get_member_from_slot_id(slot_id : int, member_type : String) -> Dictionary:
 	if !_member_cache.has(member_type): return {};
 	for member_name in _member_cache[member_type]:
 		var member : Dictionary = _member_cache[member_type][member_name];
