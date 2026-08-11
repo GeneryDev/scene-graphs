@@ -37,33 +37,33 @@ func get_scene_object_views(object_type : String) -> Dictionary:
 	
 func add_object_view(object_type : String, obj : Object) -> bool:
 	if !obj: return false;
-	var runtime_key = view_object_to_runtime_key(object_type, obj);
-	if runtime_key == null: return false;
+	var object_key = view_object_to_object_key(object_type, obj);
+	if object_key == null: return false;
 	var scene_object_views := get_scene_object_views(object_type);
-	if scene_object_views.has(runtime_key):
+	if scene_object_views.has(object_key):
 		# already added
 		return false;
 	var obj_view := {
 		"members": {}
 	};
-	scene_object_views[runtime_key] = obj_view;
+	scene_object_views[object_key] = obj_view;
 	return true;
 	
 func set_object_view(object_type : String, obj : Object, obj_view : Dictionary) -> bool:
 	if !obj: return false;
-	var runtime_key = view_object_to_runtime_key(object_type, obj);
-	if runtime_key == null: return false;
+	var object_key = view_object_to_object_key(object_type, obj);
+	if object_key == null: return false;
 	var scene_object_views := get_scene_object_views(object_type);
-	scene_object_views[runtime_key] = obj_view;
+	scene_object_views[object_key] = obj_view;
 	return true;
 	
 func get_object_view(object_type : String, obj : Object) -> Dictionary:
 	if !obj: return {};
-	var runtime_key = view_object_to_runtime_key(object_type, obj);
-	if runtime_key == null: return {};
+	var object_key = view_object_to_object_key(object_type, obj);
+	if object_key == null: return {};
 	var scene_object_views := get_scene_object_views(object_type);
-	if !scene_object_views.has(runtime_key): return {};
-	return scene_object_views[runtime_key];
+	if !scene_object_views.has(object_key): return {};
+	return scene_object_views[object_key];
 	
 func has_object_view(object_type : String, obj : Object) -> bool:
 	if get_object_view(object_type, obj):
@@ -72,12 +72,12 @@ func has_object_view(object_type : String, obj : Object) -> bool:
 	
 func remove_object_view(object_type : String, obj : Object) -> bool:
 	if !obj: return false;
-	var runtime_key = view_object_to_runtime_key(object_type, obj);
-	if runtime_key == null: return false;
+	var object_key = view_object_to_object_key(object_type, obj);
+	if object_key == null: return false;
 	var scene_object_views := get_scene_object_views(object_type);
-	if !scene_object_views.has(runtime_key): return false;
-	var removed = scene_object_views[runtime_key];
-	scene_object_views.erase(runtime_key);
+	if !scene_object_views.has(object_key): return false;
+	var removed = scene_object_views[object_key];
+	scene_object_views.erase(object_key);
 	return true;
 
 func add_object_view_member(object_type : String, obj : Object, member_type : String, member_name : StringName) -> bool:
@@ -125,38 +125,20 @@ func clear_objects(object_type : String) -> void:
 func _print_unsupported_object_type(object_type : String) -> void:
 	printerr("Graph view object type '" + object_type + "' is not supported by any of the active signal graph editor hooks. Some data may be lost.");
 
-func view_object_to_runtime_key(object_type : String, obj : Object) -> Variant:
+func view_object_to_object_key(object_type : String, obj : Object) -> Variant:
 	if !obj: return null;
 	for hook in editor.hooks.view_object_serialization:
 		if !hook.get_supported_view_object_types().has(object_type): continue;
-		return hook.view_object_to_runtime_key(object_type, obj);
+		return hook.view_object_to_object_key(object_type, obj);
 	
 	_print_unsupported_object_type(object_type);
 	return null;
 
-func runtime_key_to_view_object(object_type : String, key : Variant) -> Object:
+func object_key_to_view_object(object_type : String, key : Variant) -> Object:
 	if key == null: return null;
 	for hook in editor.hooks.view_object_serialization:
 		if !hook.get_supported_view_object_types().has(object_type): continue;
-		return hook.runtime_key_to_view_object(object_type, key);
-	
-	_print_unsupported_object_type(object_type);
-	return null;
-
-func runtime_key_serialize(object_type : String, key : Variant) -> Variant:
-	if key == null: return null;
-	for hook in editor.hooks.view_object_serialization:
-		if !hook.get_supported_view_object_types().has(object_type): continue;
-		return hook.runtime_key_serialize(object_type, key);
-	
-	_print_unsupported_object_type(object_type);
-	return null;
-
-func runtime_key_deserialize(object_type : String, serialized : Variant) -> Variant:
-	if serialized == null: return null;
-	for hook in editor.hooks.view_object_serialization:
-		if !hook.get_supported_view_object_types().has(object_type): continue;
-		return hook.runtime_key_deserialize(object_type, serialized);
+		return hook.object_key_to_view_object(object_type, key);
 	
 	_print_unsupported_object_type(object_type);
 	return null;
@@ -169,9 +151,9 @@ func instantiate_graph_node_for_object(object_type : String, obj : Object, graph
 
 func _object_to_graph_node_name(object_type : String, obj : Object) -> StringName:
 	if !obj: return &"";
-	var runtime_key = view_object_to_runtime_key(object_type, obj);
-	if !runtime_key: return &"";
-	var node_name := StringName(object_type + "_" + str(runtime_key));
+	var object_key = view_object_to_object_key(object_type, obj);
+	if !object_key: return &"";
+	var node_name := StringName(object_type + "_" + str(object_key));
 	return node_name;
 
 func get_graph_node_for_object(object_type : String, obj : Object) -> GraphNode:
@@ -303,8 +285,8 @@ func update_all_object_member_views_with_rules() -> void:
 			var raw_params : Dictionary = rule_entry.get("params");
 			var rule_hook := get_view_rule_hook(id, "member_source");
 			if !rule_hook: continue;
-			for runtime_key in object_views:
-				var obj : Object = runtime_key_to_view_object(object_type, runtime_key);
+			for object_key in object_views:
+				var obj : Object = object_key_to_view_object(object_type, object_key);
 				if !obj: continue;
 				var members : Array = rule_hook.generate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
 				for member in members:
@@ -329,19 +311,12 @@ func serialize() -> Dictionary:
 	var serialized := {
 		"view_rules": view_rules,
 		"hook_options": hook_options,
-		"scene_data": scene_data.duplicate(false)
+		"scene_data": scene_data.duplicate(false),
+		"scene_objects": scene_objects.duplicate(false)
 	};
-	var serialized_objects : Dictionary = {};
-	serialized.scene_data.objects = serialized_objects;
 	
-	for object_type in scene_objects:
-		var serialized_objects_of_type := {};
-		serialized_objects[object_type] = serialized_objects_of_type;
-		var runtime_objects_of_type = scene_objects[object_type];
-		for runtime_key in runtime_objects_of_type:
-			var serialized_key = runtime_key_serialize(object_type, runtime_key);
-			if serialized_key == null: continue;
-			serialized_objects_of_type[serialized_key] = runtime_objects_of_type[runtime_key];
+	for hook in editor.hooks.view_serialization:
+		hook.edit_serialized_view(serialized);
 	
 	return serialized;
 
@@ -349,18 +324,11 @@ func deserialize(serialized_view : Dictionary) -> SignalGraphView:
 	view_rules = serialized_view.get("view_rules",{}).duplicate(false);
 	hook_options = serialized_view.get("hook_options",{}).duplicate(false);
 	scene_data = serialized_view.get("scene_data",{}).duplicate(false);
+	scene_objects = serialized_view.get("scene_objects",{}).duplicate(false);
 	
-	scene_objects = {};
-	if scene_data.has("objects"):
-		var serialized_objects : Dictionary = scene_data.objects;
-		scene_data.erase("objects");
-		for object_type in serialized_objects:
-			var runtime_objects_of_type := {};
-			scene_objects[object_type] = runtime_objects_of_type;
-			var serialized_objects_of_type = serialized_objects[object_type];
-			for serialized_key in serialized_objects_of_type:
-				var runtime_key = runtime_key_deserialize(object_type, serialized_key);
-				runtime_objects_of_type[runtime_key] = serialized_objects_of_type[serialized_key];
+	for hook in editor.hooks.view_serialization:
+		hook.edit_deserialized_view(self);
+	
 	return self;
 
 func copy_non_scene_data_from(other : SignalGraphView, duplicate_deep : bool = false) -> void:

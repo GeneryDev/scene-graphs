@@ -265,10 +265,15 @@ class Hooks extends RefCounted:
 		"view_object_serialization": {
 			"required_methods": [
 				&"get_supported_view_object_types",
-				&"view_object_to_runtime_key",
-				&"runtime_key_to_view_object",
-				&"runtime_key_serialize",
-				&"runtime_key_deserialize",
+				&"view_object_to_object_key",
+				&"object_key_to_view_object"
+			],
+			"hooks": [] as Array[Object]
+		},
+		"view_serialization": {
+			"required_methods": [
+				&"edit_serialized_view",
+				&"edit_deserialized_view"
 			],
 			"hooks": [] as Array[Object]
 		},
