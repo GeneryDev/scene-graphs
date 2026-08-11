@@ -127,7 +127,7 @@ func _print_unsupported_object_type(object_type : String) -> void:
 
 func view_object_to_object_key(object_type : String, obj : Object) -> Variant:
 	if !obj: return null;
-	for hook in editor.hooks.view_object_serialization:
+	for hook in editor.hooks.handle_view_object_types:
 		if !hook.get_supported_view_object_types().has(object_type): continue;
 		return hook.view_object_to_object_key(object_type, obj);
 	
@@ -136,9 +136,27 @@ func view_object_to_object_key(object_type : String, obj : Object) -> Variant:
 
 func object_key_to_view_object(object_type : String, key : Variant) -> Object:
 	if key == null: return null;
-	for hook in editor.hooks.view_object_serialization:
+	for hook in editor.hooks.handle_view_object_types:
 		if !hook.get_supported_view_object_types().has(object_type): continue;
 		return hook.object_key_to_view_object(object_type, key);
+	
+	_print_unsupported_object_type(object_type);
+	return null;
+
+func object_key_serialize(object_type : String, key : Variant) -> Variant:
+	if key == null: return null;
+	for hook in editor.hooks.handle_view_object_types:
+		if !hook.get_supported_view_object_types().has(object_type): continue;
+		return hook.object_key_serialize(object_type, key);
+	
+	_print_unsupported_object_type(object_type);
+	return null;
+
+func object_key_deserialize(object_type : String, serialized : Variant) -> Variant:
+	if serialized == null: return null;
+	for hook in editor.hooks.handle_view_object_types:
+		if !hook.get_supported_view_object_types().has(object_type): continue;
+		return hook.object_key_deserialize(object_type, serialized);
 	
 	_print_unsupported_object_type(object_type);
 	return null;
@@ -315,6 +333,16 @@ func serialize() -> Dictionary:
 		"scene_objects": scene_objects.duplicate(true)
 	};
 	
+	var serialized_objects : Dictionary = serialized["scene_objects"];
+	for object_type in serialized_objects:
+		var serialized_objects_of_type := {};
+		var runtime_objects_of_type = serialized_objects[object_type];
+		serialized_objects[object_type] = serialized_objects_of_type;
+		for runtime_key in runtime_objects_of_type:
+			var serialized_key = object_key_serialize(object_type, runtime_key);
+			if serialized_key == null: continue;
+			serialized_objects_of_type[serialized_key] = runtime_objects_of_type[runtime_key];
+	
 	for hook in editor.hooks.view_serialization:
 		hook.edit_serialized_view(serialized);
 	
@@ -325,6 +353,16 @@ func deserialize(serialized_view : Dictionary) -> SignalGraphView:
 	hook_options = serialized_view.get("hook_options",{}).duplicate(false);
 	scene_data = serialized_view.get("scene_data",{}).duplicate(false);
 	scene_objects = serialized_view.get("scene_objects",{}).duplicate(false);
+	
+	var serialized_objects := scene_objects;
+	for object_type in serialized_objects:
+		var runtime_objects_of_type := {};
+		var serialized_objects_of_type = serialized_objects[object_type];
+		serialized_objects[object_type] = runtime_objects_of_type;
+		for serialized_key in serialized_objects_of_type:
+			var runtime_key = object_key_deserialize(object_type, serialized_key);
+			if runtime_key == null: continue;
+			runtime_objects_of_type[runtime_key] = serialized_objects_of_type[serialized_key];
 	
 	for hook in editor.hooks.view_serialization:
 		hook.edit_deserialized_view(self);

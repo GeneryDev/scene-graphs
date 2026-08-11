@@ -262,11 +262,13 @@ class Hooks extends RefCounted:
 			],
 			"hooks": [] as Array[Object]
 		},
-		"view_object_serialization": {
+		"handle_view_object_types": {
 			"required_methods": [
 				&"get_supported_view_object_types",
 				&"view_object_to_object_key",
-				&"object_key_to_view_object"
+				&"object_key_to_view_object",
+				&"object_key_serialize",
+				&"object_key_deserialize"
 			],
 			"hooks": [] as Array[Object]
 		},

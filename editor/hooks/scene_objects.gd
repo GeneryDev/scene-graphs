@@ -18,7 +18,7 @@ func _init(editor : SignalGraphEditor):
 	editor.delete_nodes_request.connect(_on_delete_nodes_request);
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["configure_capabilities","configure_port_types","populate_graph_nodes_from_view","drag_and_drop","view_object_serialization","view_serialization","initialize_object_graph_node","create_object_graph_node_slots"];
+	return ["configure_capabilities","configure_port_types","populate_graph_nodes_from_view","drag_and_drop","handle_view_object_types","initialize_object_graph_node","create_object_graph_node_slots"];
 
 ### CAPABILITY: configure_capabilities
 func configure_capabilities() -> void:
@@ -31,7 +31,7 @@ func configure_port_types() -> void:
 	editor.register_port_type(&"wildcard_in");
 	editor.register_port_type(&"wildcard_out");
 
-### CAPABILITY: view_object_serialization
+### CAPABILITY: handle_view_object_types
 func get_supported_view_object_types() -> Array[String]:
 	return [OBJECT_TYPE_NODE];
 
@@ -39,9 +39,11 @@ func view_object_to_object_key(object_type : String, obj : Object) -> Variant:
 	return obj.get_instance_id();
 
 func object_key_to_view_object(object_type : String, key : Variant) -> Object:
+	if key is not int: return null;
 	return instance_from_id(key as int);
 
 func object_key_serialize(object_type : String, key : Variant) -> Variant:
+	if key is not int: return null;
 	var node := instance_from_id(key as int) as Node;
 	if !node: return null;
 	var scene_root := editor.scene_root;
@@ -57,31 +59,6 @@ func object_key_deserialize(object_type : String, serialized : Variant) -> Varia
 	var node := editor.scene_root.get_node_or_null(path);
 	if !node: return null;
 	return node.get_instance_id();
-	
-### CAPABILITY: view_serialization
-func edit_serialized_view(serialized : Dictionary) -> void:
-	var serialized_objects : Dictionary = serialized["scene_objects"];
-	for object_type in serialized_objects:
-		if !get_supported_view_object_types().has(object_type): continue;
-		var serialized_objects_of_type := {};
-		var runtime_objects_of_type = serialized_objects[object_type];
-		serialized_objects[object_type] = serialized_objects_of_type;
-		for runtime_key in runtime_objects_of_type:
-			var serialized_key = object_key_serialize(object_type, runtime_key);
-			if serialized_key == null: continue;
-			serialized_objects_of_type[serialized_key] = runtime_objects_of_type[runtime_key];
-
-func edit_deserialized_view(view : SignalGraphView) -> void:
-	var serialized_objects := view.scene_objects;
-	for object_type in serialized_objects:
-		if !get_supported_view_object_types().has(object_type): continue;
-		var runtime_objects_of_type := {};
-		var serialized_objects_of_type = serialized_objects[object_type];
-		serialized_objects[object_type] = runtime_objects_of_type;
-		for serialized_key in serialized_objects_of_type:
-			var runtime_key = object_key_deserialize(object_type, serialized_key);
-			if runtime_key == null: continue;
-			runtime_objects_of_type[runtime_key] = serialized_objects_of_type[serialized_key];
 
 ### CAPABILITY: populate_graph_nodes_from_view
 
