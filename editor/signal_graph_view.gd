@@ -309,10 +309,10 @@ func has_any_scene_data() -> bool:
 
 func serialize() -> Dictionary:
 	var serialized := {
-		"view_rules": view_rules,
-		"hook_options": hook_options,
-		"scene_data": scene_data.duplicate(false),
-		"scene_objects": scene_objects.duplicate(false)
+		"view_rules": view_rules.duplicate(true),
+		"hook_options": hook_options.duplicate(true),
+		"scene_data": scene_data.duplicate(true),
+		"scene_objects": scene_objects.duplicate(true)
 	};
 	
 	for hook in editor.hooks.view_serialization:
