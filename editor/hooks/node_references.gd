@@ -21,7 +21,7 @@ func _init(editor : SignalGraphEditor):
 	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["configure_port_types","configure_hook_options","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port"];
+	return ["configure_port_types","configure_hook_options","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port","claim_object_graph_node_member_slots"];
 
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
@@ -112,7 +112,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	var to_object : Object = to_graph_node.get_object();
 	
 	var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
-	var property_info := get_property_info_by_name(to_object, property_name);
+	var property_info := Utility.get_property_info_by_name(to_object, property_name);
 	var new_value : Variant = null;
 	if property_info.type == TYPE_NODE_PATH:
 		new_value = to_object.get_path_to(from_object);
@@ -139,7 +139,7 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	var to_object : Object = to_graph_node.get_object();
 	
 	var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
-	var property_info := get_property_info_by_name(to_object, property_name);
+	var property_info := Utility.get_property_info_by_name(to_object, property_name);
 	var new_value : Variant = null;
 	if property_info.type == TYPE_NODE_PATH:
 		new_value = NodePath();
@@ -159,12 +159,6 @@ func _on_connections_changed() -> void:
 #	for child : Node in editor.get_children():
 #		if !is_instance_of(child, SceneObjectGraphNode):
 #			continue;
-	
-static func get_property_info_by_name(obj : Object, property_name : StringName) -> Dictionary:
-	for property_info in obj.get_property_list():
-		if property_info["name"] != property_name: continue;
-		return property_info;
-	return {};
 		
 # CAPABILITY: initialize_object_graph_node
 func initialize_object_graph_node(graph_node : GraphNode) -> void:
@@ -178,6 +172,26 @@ func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]
 # CAPABILITY: create_object_graph_node_slots
 func draw_object_graph_node_port(graph_node : GraphNode, slot_index: int, position: Vector2i, left: bool, color: Color) -> bool:
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).draw_port(slot_index, position, left, color);
+
+### CAPABILITY: claim_object_graph_node_member_slots
+func get_object_graph_node_member_slot_bid(object_type : String, object : Object, member_type : String, member_name : StringName) -> float:
+	if member_type == MEMBER_TYPE_PROPERTY && Utility.is_property_node_reference(Utility.get_property_info_by_name(object, member_name)):
+		return 2;
+	return 0;
+
+class Utility extends RefCounted:
+	static func get_property_info_by_name(obj : Object, property_name : StringName) -> Dictionary:
+		for property_info in obj.get_property_list():
+			if property_info["name"] != property_name: continue;
+			return property_info;
+		return {};
+	
+	static func is_property_node_reference(property : Dictionary) -> bool:
+		if property.type == TYPE_NODE_PATH:
+			return true;
+		elif property.type == TYPE_OBJECT && (property.hint & PROPERTY_HINT_NODE_TYPE) != 0:
+			return true;
+		return false;
 
 class SceneObjectGraphNodeExtension extends RefCounted:
 	var graph_node : GraphNode;
@@ -200,12 +214,6 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		created.append_array(property_slots);
 		
 		return created;
-		
-	static func get_property_info_by_name(obj : Object, property_name : StringName) -> Dictionary:
-		for property_info in obj.get_property_list():
-			if property_info["name"] != property_name: continue;
-			return property_info;
-		return {};
 	
 	func create_path_header_slot() -> Dictionary:
 		var header_control := _create_row("", &"NodePath", HORIZONTAL_ALIGNMENT_RIGHT);
@@ -226,7 +234,9 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		var created : Array[Dictionary] = [];
 		var obj : Object = graph_node.get_object();
 		for property_name in editor.current_view.get_object_view_members(graph_node.object_type, obj, MEMBER_TYPE_PROPERTY):
-			var property_info := get_property_info_by_name(obj, property_name);
+			var property_info := Utility.get_property_info_by_name(obj, property_name);
+			if !Utility.is_property_node_reference(property_info): continue;
+			if !graph_node.claim_object_graph_node_member_slot(hook, MEMBER_TYPE_PROPERTY, property_name): continue;
 			if !property_info:
 				print("No property found for name '" + property_name + "' in object " + str(obj));
 				continue;

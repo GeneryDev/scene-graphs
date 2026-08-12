@@ -90,6 +90,17 @@ func reset_to_user_size() -> void:
 	size = Vector2(ceil(size.x / snapping_distance)*snapping_distance,ceil(size.y / snapping_distance)*snapping_distance);
 	self.size = size.max(user_size);
 
+func claim_object_graph_node_member_slot(hook : Object, member_type : String, member_name : StringName) -> bool:
+	var highest_bid : float = 0;
+	var matching_bid : float = 0;
+	for other_hook in editor.hooks.claim_object_graph_node_member_slots:
+		var bid : float = other_hook.get_object_graph_node_member_slot_bid(object_type, get_object(), member_type, member_name);
+		if bid > highest_bid:
+			highest_bid = bid;
+		if other_hook == hook:
+			matching_bid = bid;
+	return matching_bid == highest_bid;
+
 func create_and_add_contents() -> void:
 	var slots_to_add : Array[Dictionary]= [];
 	for hook in editor.hooks.create_object_graph_node_slots:

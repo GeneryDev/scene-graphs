@@ -24,6 +24,7 @@ func get_signal_graph_capabilities() -> Array[String]:
 func configure_capabilities() -> void:
 	editor.hooks.register_capability("initialize_object_graph_node", [&"initialize_object_graph_node"] as Array[StringName]);
 	editor.hooks.register_capability("create_object_graph_node_slots", [&"create_object_graph_node_slots"] as Array[StringName]);
+	editor.hooks.register_capability("claim_object_graph_node_member_slots", [&"get_object_graph_node_member_slot_bid"] as Array[StringName]);
 	editor.hooks.register_capability("draw_object_graph_node_port", [&"draw_object_graph_node_port"] as Array[StringName]);
 	
 ### CAPABILITY: configure_ports
@@ -173,7 +174,7 @@ func _on_connection_drag_ended() -> void:
 # CAPABILITY: initialize_object_graph_node
 func initialize_object_graph_node(graph_node : GraphNode) -> void:
 	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self));
-		
+
 # CAPABILITY: create_object_graph_node_slots
 func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]:
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
@@ -215,7 +216,6 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		slot.add_theme_stylebox_override("panel", titlebar_extension_stylebox);
 		var add_button := Button.new();
 		add_button.flat = true;
-#		add_button.text = "+";
 		add_button.icon = EditorInterface.get_editor_theme().get_icon("Add",&"EditorIcons");
 		add_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER;
 		add_button.pressed.connect(_on_add_button_pressed);

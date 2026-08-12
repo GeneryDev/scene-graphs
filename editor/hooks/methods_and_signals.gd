@@ -627,7 +627,7 @@ func _on_selection_changed_with_script(script : Script, nodes : Array[Node]) -> 
 			var to_graph_node := editor.get_node_or_null(NodePath(c.to_node));
 			return from_graph_node != null && to_graph_node != null;
 		));
-	elif script == null:
+	else:
 		_stop_editing_connection_properties()
 
 func select_connections(connections : Array) -> void:

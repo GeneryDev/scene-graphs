@@ -97,6 +97,7 @@ func _refresh_connection_elements() -> void:
 			if cached_connection.to_graph_node.is_queued_for_deletion(): continue;
 			cached_connection.still_valid = true;
 			matching_cached_connection = cached_connection;
+			cached_connection.graph_element.graph_connection = connection;
 		
 		if !matching_cached_connection:
 			var graph_element : GraphElement = ConnectionHandleElement.new(connection, member_connection, editor);

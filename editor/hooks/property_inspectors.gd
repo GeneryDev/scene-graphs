@@ -15,7 +15,7 @@ func _init(editor : SignalGraphEditor):
 	self.editor = editor;
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["initialize_object_graph_node","configure_hook_options","create_object_graph_node_slots","configure_member_selector"];
+	return ["initialize_object_graph_node","configure_hook_options","create_object_graph_node_slots","configure_member_selector","claim_object_graph_node_member_slots"];
 
 ### CAPABILITY: configure_hook_options
 func get_hook_options_id() -> String:
@@ -118,6 +118,12 @@ func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]
 	if !editor.current_view.get_hook_options(self).enable_property_inspectors: return [];
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
 
+### CAPABILITY: claim_object_graph_node_member_slots
+func get_object_graph_node_member_slot_bid(object_type : String, object : Object, member_type : String, member_name : StringName) -> float:
+	if member_type == MEMBER_TYPE_PROPERTY:
+		return 1;
+	return 0;
+
 class SceneObjectGraphNodeExtension extends RefCounted:
 	var graph_node : GraphNode;
 	var editor : SignalGraphEditor;
@@ -147,6 +153,7 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		var created : Array[Dictionary] = [];
 		var obj : Object = graph_node.get_object();
 		for property_name in editor.current_view.get_object_view_members(graph_node.object_type, obj, MEMBER_TYPE_PROPERTY):
+			if !graph_node.claim_object_graph_node_member_slot(hook, MEMBER_TYPE_PROPERTY, property_name): continue;
 			var property_info := get_property_info_by_name(obj, property_name);
 			if !property_info:
 				print("No property found for name '" + property_name + "' in object " + str(obj));
