@@ -38,11 +38,16 @@ func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 
 func get_object() -> Object:
 	return obj;
+	
+func get_object_key() -> Variant:
+	return editor.current_view.view_object_to_object_key(object_type, get_object());
+
+func get_object_view() -> Dictionary:
+	return editor.current_view.get_object_view(object_type, get_object());
 
 func update_from_view() -> void:
 	_building_from_view = true;
-	var obj := get_object();
-	var obj_view := editor.current_view.get_object_view(object_type, obj);
+	var obj_view := get_object_view();
 	
 	if obj_view.has("position_offset"):
 		position_offset = obj_view["position_offset"] as Vector2;
@@ -62,8 +67,7 @@ func update_from_view() -> void:
 	
 func update_view() -> void:
 	if _building_from_view: return;
-	var obj := get_object();
-	var obj_view := editor.current_view.get_object_view(object_type, obj);
+	var obj_view := get_object_view();
 	if !obj_view: return;
 	
 	obj_view["position_offset"] = position_offset;

@@ -1,4 +1,4 @@
-﻿extends Resource
+extends Resource
 @export var info : String = "";
 
 const MEMBER_TYPE_METHOD := "methods";

@@ -2,8 +2,7 @@
 extends RefCounted
 
 static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
-static var ObjectSignalConnectionElement : Script = preload("res://addons/signal-graphs/editor/elements/object_signal_connection_graph_element.gd");
-static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-graphs/editor/inspector/signal_connection_property_edit.gd");
+static var ConnectionHandleElement : Script = preload("res://addons/signal-graphs/editor/elements/connection_handle_element.gd");
 
 var editor : SignalGraphEditor;
 var _connections_with_elements : Array[Dictionary] = [];
@@ -14,13 +13,32 @@ func _init(editor : SignalGraphEditor):
 	editor.connection_line_cache_invalidated.connect(_invalidate_line_end_cache);
 	editor.connections_changed.connect(_on_connections_changed);
 	editor.connections_layer.draw.connect(_on_connections_draw);
-	editor.selection_changed_with_script.connect(_on_selection_changed_with_script);
 	editor.begin_node_move.connect(_on_begin_node_move);
 	editor.end_node_move.connect(_on_end_node_move);
 	editor.visibility_changed.connect(_on_visibility_changed);
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["override_connection_lines"];
+	return ["configure_capabilities","configure_hook_options","override_connection_lines","view_serialization"];
+	
+### CAPABILITY: configure_capabilities
+func configure_capabilities() -> void:
+	editor.hooks.register_capability("initialize_connection_handle", [&"initialize_connection_handle"] as Array[StringName]);
+	editor.hooks.register_capability("draw_connection_handle", [&"draw_connection_handle"] as Array[StringName]);
+
+### CAPABILITY: configure_hook_options
+func get_hook_options_id() -> String:
+	return "signal_graphs:connection_handles";
+
+func get_hook_options_label(options : Options) -> String:
+	if options == null: return "Connection Handles";
+	return "Connection Handles: %s" % ["Enabled" if options.handles_enabled else "Disabled"];
+
+func create_hook_options() -> Options:
+	return Options.new();
+
+func get_hook_description() -> String:
+	return "Shows movable handles for all graph connections, allowing you to redirect each individual connection to avoid tangling.\nNote: It's recommended to have this enabled when using Method and Signal connections; handles display connection flags and let you edit them when selected.";
+	
 	
 ### CONNECTIONS
 
@@ -38,38 +56,61 @@ func _on_visibility_changed() -> void:
 		call_deferred(&"_refresh_connection_elements");
 
 func _refresh_connection_elements() -> void:
+	if editor.current_view == null: return;
 	var intended_index := editor.connections_layer.get_index()+1;
 	
 	for cached_connection in _connections_with_elements:
 		cached_connection.still_valid = false;
+		
+	var options : Options = editor.current_view.get_hook_options(self);
 	
 	for connection : Dictionary in editor.connections:
-		if !editor.check_connection_port_types(connection, editor.port_type(&"signal"), editor.port_type(&"method")): continue;
+		if !options.handles_enabled: break;
+		if !editor.is_connection_ready(connection): continue;
 		
 		var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
 		var to_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.to_node));
 		
+		if !is_instance_of(from_graph_node, SceneObjectGraphNode): continue;
+		if !is_instance_of(to_graph_node, SceneObjectGraphNode): continue;
+		
+		var member_connection := {
+			"from_object_type": from_graph_node.object_type,
+			"from_object": from_graph_node.get_object_key(),
+			"from_member_type": from_graph_node.get_member_from_port_id(connection.from_port).member_type,
+			"from_member_name": from_graph_node.get_member_from_port_id(connection.from_port).member_name,
+			"to_object_type": to_graph_node.object_type,
+			"to_object": to_graph_node.get_object_key(),
+			"to_member_type": to_graph_node.get_member_from_port_id(connection.to_port).member_type,
+			"to_member_name": to_graph_node.get_member_from_port_id(connection.to_port).member_name
+		};
+		
 		var matching_cached_connection : Dictionary;
 		
 		for cached_connection in _connections_with_elements:
-			if cached_connection.connection != connection: continue;
+			if cached_connection.member_connection != member_connection: continue;
 			if !is_instance_valid(cached_connection.graph_element): continue;
 			if cached_connection.graph_element.is_queued_for_deletion(): continue;
+			if !is_instance_valid(cached_connection.from_graph_node): continue;
+			if cached_connection.from_graph_node.is_queued_for_deletion(): continue;
+			if !is_instance_valid(cached_connection.to_graph_node): continue;
+			if cached_connection.to_graph_node.is_queued_for_deletion(): continue;
 			cached_connection.still_valid = true;
 			matching_cached_connection = cached_connection;
 		
 		if !matching_cached_connection:
-			var graph_element : GraphElement = ObjectSignalConnectionElement.new();
-			graph_element.setup(connection, editor);
+			var graph_element : GraphElement = ConnectionHandleElement.new(connection, member_connection, editor);
 			editor.connections_layer.add_sibling(graph_element, false);
 			matching_cached_connection = {
 				"connection": connection,
+				"member_connection": member_connection,
 				"graph_element": graph_element,
 				"still_valid": true,
 				"from_graph_node": from_graph_node,
 				"to_graph_node": to_graph_node
 			};
 			_connections_with_elements.push_back(matching_cached_connection);
+			graph_element.update_from_view();
 		
 		editor.move_child(matching_cached_connection.graph_element, intended_index);
 		_reposition_connection_element(matching_cached_connection);
@@ -82,56 +123,33 @@ func _refresh_connection_elements() -> void:
 					editor.remove_child(cached_connection.graph_element);
 				cached_connection.graph_element.queue_free();
 			_connections_with_elements.remove_at(i);
+	
+	_invalidate_line_end_cache.call_deferred();
 
 func _reposition_connection_element(cached_connection : Dictionary) -> void:
 	var connection : Dictionary = cached_connection.connection;
 	var graph_element : GraphElement = cached_connection.graph_element;
+	if !is_instance_valid(cached_connection.from_graph_node): return;
 	var from_graph_node : GraphNode = cached_connection.from_graph_node;
 	var to_graph_node : GraphNode = cached_connection.to_graph_node;
 	if !from_graph_node || !to_graph_node: return;
+	if connection.from_port >= from_graph_node.get_output_port_count(): return;
+	if connection.to_port >= to_graph_node.get_input_port_count(): return;
 	var line_from := (from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset);
 	var line_to := (to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset);
 	var line : PackedVector2Array = editor.get_connection_line(line_from, line_to);
 	var mid_point_straight := (line_from + line_to) / 2;
 	var mid_point := line[line.size()/2] if line.size() % 2 == 1 else (line[line.size()/2-1]+line[line.size()/2])/2;
-	
-	var before_mid_point := line[line.size()/2-1] if line.size() % 2 == 1 else line[line.size()/2-1];
-	var after_mid_point := line[line.size()/2] if line.size() % 2 == 1 else line[line.size()/2];
 	var new_position : Vector2;
 	var rotation : float = 0;
 	if graph_element.get_current_mid_point_offset():
 		new_position = mid_point_straight + graph_element.mid_point_offset;
-		rotation = before_mid_point.angle_to_point(after_mid_point);
+		rotation = (line_to - line_from).angle();
 	else:
 		new_position = mid_point;
 		rotation = (line_to - line_from).angle();
 	graph_element.reposition(new_position, rotation);
-	graph_element.update_connection_info();
-
-### SELECTION
-
-func _on_selection_changed_with_script(script : Script, nodes : Array[Node]) -> void:
-	if script == ObjectSignalConnectionElement:
-		select_connections(nodes.map(func (n : Node):
-			for cached_connection : Dictionary in _connections_with_elements:
-				if cached_connection.graph_element == n:
-					return cached_connection.connection;
-			return null;
-		).filter(func (c : Dictionary) -> bool:
-			var from_graph_node := editor.get_node_or_null(NodePath(c.from_node));
-			var to_graph_node := editor.get_node_or_null(NodePath(c.to_node));
-			return from_graph_node != null && to_graph_node != null;
-		));
-	elif script == null:
-		if is_instance_of(EditorInterface.get_inspector().get_edited_object(), SignalConnectionPropertyEdit):
-			EditorInterface.get_inspector().edit(null);
-
-
-func select_connections(connections : Array) -> void:
-	EditorInterface.get_selection().clear();
-	var edit_resource : Resource = SignalConnectionPropertyEdit.new();
-	edit_resource.setup(editor, connections);
-	EditorInterface.inspect_object(edit_resource);
+#	graph_element.update_connection_info();
 
 ### CAPABILITY: override_connection_lines
 
@@ -169,17 +187,27 @@ func _find_connection_from_line_ends(from_position: Vector2, to_position: Vector
 	if _line_end_cache_time != now:
 		_line_end_cache_time = now;
 		_update_line_end_cache();
-	var cache_entry = _line_end_cache.get(_get_line_end_cache_key(from_position));
+	var cache_entry;
+	# Search in view coordinates (w/ zoom)
+	cache_entry = _line_end_cache.get(_get_line_end_cache_key(from_position / editor.zoom));
 	if cache_entry:
 		for cached_connection : Dictionary in cache_entry:
-			var line_end_cache : Array = cached_connection.line_ends;
-			if from_position.distance_squared_to(line_end_cache[0]) > 5:
-				continue;
-			if to_position.distance_squared_to(line_end_cache[1]) > 5:
-				continue;
-	
-			return cached_connection;
+			if match_line_ends(from_position, to_position, 5 * editor.zoom, cached_connection.line_ends_view):
+				return cached_connection;
+	# Search in absolute coordinates (w/o zoom)
+	cache_entry = _line_end_cache.get(_get_line_end_cache_key(from_position));
+	if cache_entry:
+		for cached_connection : Dictionary in cache_entry:
+			if match_line_ends(from_position, to_position, 5, cached_connection.line_ends_absolute):
+				return cached_connection;
 	return {};
+
+func match_line_ends(from_position : Vector2, to_position : Vector2, tolerance : float, line_ends : Array) -> bool:
+	var from_dist_sqr := from_position.distance_squared_to(line_ends[0]);
+	if from_dist_sqr > tolerance: return false;
+	var to_dist_sqr := to_position.distance_squared_to(line_ends[1]);
+	if to_dist_sqr > tolerance: return false;
+	return true;
 
 func _get_line_end_cache_key(from_position : Vector2) -> int:
 	return int(from_position.y) / 100;
@@ -191,9 +219,12 @@ func _update_line_end_cache() -> void:
 	_line_end_cache.clear();
 	for cached_connection : Dictionary in _connections_with_elements:
 		var connection = cached_connection.connection;
-		cached_connection.line_ends = [Vector2(0,0),Vector2(0,0)];
+		cached_connection.line_ends_absolute = [Vector2(0,0),Vector2(0,0)];
+		cached_connection.line_ends_view = [Vector2(0,0),Vector2(0,0)];
 		
 		if !is_instance_valid(cached_connection.graph_element): continue;
+		if !is_instance_valid(cached_connection.from_graph_node): continue;
+		if !is_instance_valid(cached_connection.to_graph_node): continue;
 
 		var from_graph_node : GraphNode = cached_connection.from_graph_node;
 		var to_graph_node : GraphNode = cached_connection.to_graph_node;
@@ -201,12 +232,16 @@ func _update_line_end_cache() -> void:
 			continue;
 		if connection.from_port >= from_graph_node.get_output_port_count(): continue;
 		if connection.to_port >= to_graph_node.get_input_port_count(): continue;
-		var from := (from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset) * editor.zoom;
-		var to := (to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset) * editor.zoom;
-		cached_connection.line_ends[0] = from;
-		cached_connection.line_ends[1] = to;
+		var from_absolute := from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset;
+		var to_absolute := to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset;
+		var from_view := from_absolute * editor.zoom;
+		var to_view := to_absolute * editor.zoom;
+		cached_connection.line_ends_absolute[0] = from_absolute;
+		cached_connection.line_ends_absolute[1] = to_absolute;
+		cached_connection.line_ends_view[0] = from_view;
+		cached_connection.line_ends_view[1] = to_view;
 		
-		var cache_key := _get_line_end_cache_key(from);
+		var cache_key := _get_line_end_cache_key(from_absolute);
 
 		if !_line_end_cache.has(cache_key):
 			_line_end_cache[cache_key] = [cached_connection];
@@ -230,3 +265,54 @@ func _on_end_node_move() -> void:
 		if !is_instance_valid(cached_connection.graph_element): continue;
 		if cached_connection.graph_element.selected:
 			cached_connection.graph_element.apply_mid_point_offset_change();
+
+### CAPABILITY: view_serialization
+func edit_serialized_view(serialized : Dictionary) -> void:
+	for object_type in serialized.scene_objects:
+		var objects_for_type : Dictionary = serialized.scene_objects[object_type];
+		for object_key in objects_for_type:
+			var object_view : Dictionary = objects_for_type[object_key];
+			if !object_view.has("connection_handles"): continue;
+			var handles : Array = object_view["connection_handles"];
+			var handle_index := 0;
+			while handle_index < handles.size():
+				var handle_data : Dictionary = handles[handle_index];
+				if handle_data.has("member_connection"):
+					var member_connection := handle_data.get("member_connection") as Dictionary;
+					if member_connection.has("from_object") && member_connection.has("to_object"):
+						var serialized_key_from = editor.current_view.object_key_serialize(member_connection.from_object_type, member_connection.from_object);
+						var serialized_key_to = editor.current_view.object_key_serialize(member_connection.to_object_type, member_connection.to_object);
+						
+						if serialized_key_from != null && serialized_key_to != null:
+							member_connection.from_object = serialized_key_from;
+							member_connection.to_object = serialized_key_to;
+							handle_index += 1;
+							continue;
+				# invalid
+				handles.remove_at(handle_index);
+func edit_deserialized_view(view : SignalGraphView) -> void:
+	for object_type in view.scene_objects:
+		var objects_for_type : Dictionary = view.scene_objects[object_type];
+		for object_key in objects_for_type:
+			var object_view : Dictionary = objects_for_type[object_key];
+			if !object_view.has("connection_handles"): continue;
+			var handles : Array = object_view["connection_handles"];
+			var handle_index := 0;
+			while handle_index < handles.size():
+				var handle_data : Dictionary = handles[handle_index];
+				if handle_data.has("member_connection"):
+					var member_connection := handle_data.get("member_connection") as Dictionary;
+					if member_connection.has("from_object") && member_connection.has("to_object"):
+						var deserialized_key_from = view.object_key_deserialize(member_connection.from_object_type, member_connection.from_object);
+						var deserialized_key_to = view.object_key_deserialize(member_connection.to_object_type, member_connection.to_object);
+						
+						if deserialized_key_from != null && deserialized_key_to != null:
+							member_connection.from_object = deserialized_key_from;
+							member_connection.to_object = deserialized_key_to;
+							handle_index += 1;
+							continue;
+				# invalid
+				handles.remove_at(handle_index);
+
+class Options extends RefCounted:
+	@export var handles_enabled : bool = true;

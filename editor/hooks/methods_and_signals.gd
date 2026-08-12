@@ -2,6 +2,8 @@
 extends RefCounted
 
 static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
+static var ConnectionHandleElement : Script = preload("res://addons/signal-graphs/editor/elements/connection_handle_element.gd");
+static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-graphs/editor/inspector/signal_connection_property_edit.gd");
 
 const OBJECT_TYPE_NODE := "node";
 const OBJECT_TYPE_OTHER := "other"; # temporary placeholder for non-node object types
@@ -22,11 +24,15 @@ var editor : SignalGraphEditor;
 func _init(editor : SignalGraphEditor):
 	self.editor = editor;
 	
+	editor.connection_request.connect(_on_connection_request);
+	editor.disconnection_request.connect(_on_disconnection_request);
+	editor.connections_changed.connect(_on_connections_changed);
+	editor.selection_changed_with_script.connect(_on_selection_changed_with_script);
+	
 	scene_connections_updated.connect(_on_scene_connections_updated);
-	connect_interface_signals();
 	
 func get_signal_graph_capabilities() -> Array[String]:
-	return ["configure_port_types","configure_hook_options","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port","configure_member_selector"];
+	return ["configure_port_types","configure_hook_options","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port","configure_member_selector","initialize_connection_handle","draw_connection_handle"];
 	
 ### CAPABILITY: configure_ports
 func configure_port_types() -> void:
@@ -94,12 +100,7 @@ func populate_graph_node_connections() -> void:
 			editor.connect_node(owner_graph_node.name, from_port, graph_node.name, to_port);
 	editor.notify_connections_changed();
 
-### INTERFACE SIGNALS
-
-func connect_interface_signals() -> void:
-	editor.connection_request.connect(_on_connection_request);
-	editor.disconnection_request.connect(_on_disconnection_request);
-	editor.connections_changed.connect(_on_connections_changed);
+### CONNECTING
 	
 func _on_connection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
 	var from_graph_node := editor.get_node(NodePath(from_node_name));
@@ -612,6 +613,108 @@ class EqualDistributionHBoxContainer extends Container:
 		match what:
 			NOTIFICATION_SORT_CHILDREN:
 				_sort_children();
+
+### CONNECTION SELECTION
+
+func _on_selection_changed_with_script(script : Script, nodes : Array[Node]) -> void:
+	if script == ConnectionHandleElement && nodes.all(func (n : Node) -> bool:
+			return n.has_meta(META_NAME_EXTENSION);
+	):
+		select_connections(nodes.map(func (handle : Node):
+			return handle.graph_connection;
+		).filter(func (c : Dictionary) -> bool:
+			var from_graph_node := editor.get_node_or_null(NodePath(c.from_node));
+			var to_graph_node := editor.get_node_or_null(NodePath(c.to_node));
+			return from_graph_node != null && to_graph_node != null;
+		));
+	elif script == null:
+		_stop_editing_connection_properties()
+
+func select_connections(connections : Array) -> void:
+	EditorInterface.get_selection().clear();
+	var edit_resource : Resource = SignalConnectionPropertyEdit.new();
+	edit_resource.setup(editor, connections);
+	EditorInterface.inspect_object(edit_resource);
+
+func _stop_editing_connection_properties() -> void:
+		if is_instance_of(EditorInterface.get_inspector().get_edited_object(), SignalConnectionPropertyEdit):
+			EditorInterface.get_inspector().edit(null);
+
+### CAPABILITY: initialize_connection_handle
+func initialize_connection_handle(element : GraphElement) -> void:
+	if element.member_connection.from_member_type == MEMBER_TYPE_SIGNAL && element.member_connection.to_member_type == MEMBER_TYPE_METHOD:
+		element.set_meta(META_NAME_EXTENSION, ConnectionHandleExtension.new(element, editor, self));
+
+# CAPABILITY: draw_connection_handle
+func draw_connection_handle(element : GraphElement, center : Vector2, connection_rotation: float, handle_size : float) -> bool:
+	if !element.has_meta(META_NAME_EXTENSION): return false;
+	return (element.get_meta(META_NAME_EXTENSION) as ConnectionHandleExtension).draw_connection_handle(center, connection_rotation, handle_size);
+
+class ConnectionHandleExtension extends RefCounted:
+	static var ICON_ARGUMENTS : Texture2D = preload("res://addons/signal-graphs/icons/bound_arguments.svg");
+
+	var element : GraphElement;
+	var editor : SignalGraphEditor;
+	var hook : Object;
+
+	var connection_flags : ConnectFlags = CONNECT_PERSIST;
+	var connection_callable : Callable;
 	
+	func _init(element : GraphElement, editor : SignalGraphEditor, hook : Object) -> void:
+		self.element = element;
+		self.editor = editor;
+		self.hook = hook;
+		
+		element.repositioned.connect(update_connection_info);
+	
+	func draw_connection_handle(center : Vector2, connection_rotation : float, handle_size : float) -> bool:
+		var theme := EditorInterface.get_editor_theme();
+		if (connection_flags & CONNECT_ONE_SHOT) != 0:
+			var icon := theme.get_icon("ZoomReset", "EditorIcons") as Texture2D;
+			element.draw_set_transform(center, connection_rotation);
+			element.draw_texture(icon, Vector2(handle_size*1.5,handle_size*1.5) - icon.get_size() / 2);
+		if (connection_flags & CONNECT_DEFERRED) != 0:
+			var icon := theme.get_icon("Timer", "EditorIcons") as Texture2D;
+			element.draw_set_transform(center, connection_rotation);
+			element.draw_texture(icon, Vector2(handle_size*1.5,-handle_size*1.5) - icon.get_size() / 2);
+		if (connection_flags & CONNECT_APPEND_SOURCE_OBJECT) != 0 || connection_callable.get_bound_arguments_count() > 0 || connection_callable.get_unbound_arguments_count() > 0:
+			var icon := ICON_ARGUMENTS;
+			element.draw_set_transform(center, connection_rotation);
+			element.draw_texture(icon, Vector2(-handle_size*3,0) - icon.get_size() / 2);
+		
+		element.draw_arrow_handle(center, connection_rotation, handle_size * 1.25);
+			
+		return true;
+	
+	func update_connection_info() -> void:
+		var from_graph_node : GraphNode = element.get_from_graph_node();
+		var to_graph_node : GraphNode = element.get_to_graph_node();
+		if !from_graph_node || !to_graph_node: return;
+		
+		var from_object : Object = from_graph_node.get_object();
+		var to_object : Object = to_graph_node.get_object();
+		var signal_name : StringName = element.member_connection.from_member_name;
+		var method_name : StringName = element.member_connection.to_member_name;
+		
+		var signal_connection : Dictionary;
+		for signal_connection_candidate in from_object.get_signal_connection_list(signal_name):
+			if !signal_connection_candidate.callable.is_valid(): continue;
+			if (signal_connection_candidate.flags & CONNECT_PERSIST) == 0: continue;
+			if signal_connection_candidate.callable.get_method() == method_name:
+				signal_connection = signal_connection_candidate;
+		
+		var callable := Callable(to_object, method_name);
+		
+		if signal_connection:
+			_update_connection_info(signal_connection.flags, signal_connection.callable);
+			
+	func _update_connection_info(flags : ConnectFlags, callable : Callable) -> void:
+		var updated := false;
+		if connection_flags != flags: updated = true;
+		if connection_callable != callable: updated = true;
+		connection_flags = flags;
+		connection_callable = callable;
+		if updated: element.queue_redraw();
+
 class Options extends RefCounted:
 	@export var enable_method_and_signal_ports : bool = true;

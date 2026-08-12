@@ -34,7 +34,7 @@ var _port_types_by_name : Dictionary[StringName, int] = {
 	&"": -1
 };
 var _next_port_type_idx := 0;
-var _pending_rearrange_after_load := false;
+var _pending_initial_draw := false;
 
 func _init():
 	interface_signals = InterfaceSignals.new(self);
@@ -55,7 +55,6 @@ func _ready() -> void:
 		hook.configure_port_types();
 
 func clear():
-	_pending_rearrange_after_load = false;
 	clear_connections();
 	notify_connections_changed();
 	for child in get_children():
@@ -73,10 +72,7 @@ func load(view : SignalGraphView) -> void:
 		view.update_object_views_with_rules();
 		view.update_all_object_member_views_with_rules();
 	
-		if view.scene_data.has("zoom"):
-			zoom = view.scene_data.zoom;
-		if view.scene_data.has("scroll_offset"):
-			scroll_offset = view.scene_data.scroll_offset;
+		_update_nav_from_view();
 	else:
 		view.clear_all_objects();
 		view.update_object_views_with_rules();
@@ -87,7 +83,20 @@ func load(view : SignalGraphView) -> void:
 	if is_visible_in_tree():
 		call_deferred(&"rearrange_after_load");
 	else:
-		_pending_rearrange_after_load = true;
+		_pending_initial_draw = true;
+
+func _update_nav_from_view() -> void:
+	if !current_view: return;
+	if current_view.scene_data.has("zoom"):
+		zoom = current_view.scene_data.zoom;
+	if current_view.scene_data.has("scroll_offset"):
+		scroll_offset = current_view.scene_data.scroll_offset;
+
+func _update_nav_view() -> void:
+	if !current_view: return;
+	if _pending_initial_draw: return;
+	current_view.scene_data.scroll_offset = scroll_offset;
+	current_view.scene_data.zoom = zoom;
 
 func _on_current_view_updated():
 	for hook in hooks.populate_graph_nodes_from_view:
@@ -97,8 +106,9 @@ func _on_current_view_updated():
 	view_updated.emit();
 
 func rearrange_after_load():
-	_pending_rearrange_after_load = false;
+	_pending_initial_draw = false;
 	arranger.flush_arrange();
+	_update_nav_from_view();
 
 func queue_arrange(node : GraphElement) -> void:
 	arranger.queue_arrange(node);
@@ -202,6 +212,18 @@ func get_default_connection_line(from_position: Vector2, to_position: Vector2, c
 	
 func local_to_graph_position(position : Vector2) -> Vector2:
 	return (position + scroll_offset) / zoom;
+
+func is_connection_ready(connection : Dictionary) -> bool:
+	var from_graph_node := get_node_or_null(NodePath(connection.from_node));
+	var to_graph_node := get_node_or_null(NodePath(connection.to_node));
+	
+	if !from_graph_node: return false;
+	if !to_graph_node: return false;
+	
+	if connection.from_port >= from_graph_node.get_output_port_count(): return false;
+	if connection.to_port >= to_graph_node.get_input_port_count(): return false;
+	
+	return true;
 
 func check_connection_port_types(connection : Dictionary, from_port_type : int, to_port_type : int) -> bool:
 	var from_graph_node := get_node_or_null(NodePath(connection.from_node));
@@ -345,9 +367,9 @@ class Hooks extends RefCounted:
 	func _add_builtin_hooks() -> void:
 		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_objects.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/methods_and_signals.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/connection_flag_editing.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/property_inspectors.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/node_references.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/property_inspectors.gd"));
+		add_hook(load("res://addons/signal-graphs/editor/hooks/connection_handles.gd"));
 		
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/nodes.gd"));
 		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/connected_methods_and_signals.gd"));
@@ -527,13 +549,11 @@ class InterfaceSignals extends RefCounted:
 		_deselect_node(node);
 		
 	func _on_visibility_changed() -> void:
-		if editor._pending_rearrange_after_load:
+		if editor._pending_initial_draw:
 			editor.call_deferred(&"rearrange_after_load");
 	
 	func _on_scroll_offset_changed(offset : Vector2) -> void:
-		if !editor.current_view: return;
-		editor.current_view.scene_data.scroll_offset = editor.scroll_offset;
-		editor.current_view.scene_data.zoom = editor.zoom;
+		editor._update_nav_view();
 
 ### Arranger
 
@@ -559,5 +579,5 @@ class Arranger extends RefCounted:
 		editor.arrange_nodes();
 		editor.set_selected(null);
 	
-	func _is_still_valid(node : GraphElement) -> bool:
-		return node != null && is_instance_valid(node) && node.get_parent() == editor;
+	func _is_still_valid(node) -> bool:
+		return node != null && node is GraphElement && is_instance_valid(node) && node.get_parent() == editor;
