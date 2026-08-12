@@ -79,7 +79,7 @@ func _disable_plugin() -> void:
 	plugin_disabled.emit();
 
 func _get_plugin_name() -> String:
-	return "Signals";
+	return "Scene Graph";
 	
 func _has_main_screen() -> bool:
 	var is_main_screen : bool = _is_this_instance_main_screen if _is_this_instance_main_screen != null else settings.plugin_mode == PluginMode.MainScreen;
