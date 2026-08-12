@@ -1,5 +1,5 @@
 ﻿@tool
-class_name SignalGraphMemberSelector
+class_name SceneGraphMemberSelector
 extends RefCounted
 
 var _last_selected_member_type := "";
@@ -11,9 +11,9 @@ var all_output_member_types;
 var _active : Dictionary;
 var _member_lists_by_type : Dictionary;
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 
 func get_all_member_types() -> Array[String]:
@@ -183,7 +183,7 @@ func _create_member_selector(member_types : Array[String], force_start_tab : Str
 	
 	var theme := EditorInterface.get_editor_theme();
 	
-	var dialog : ConfirmationDialog = load("res://addons/signal-graphs/scenes/signal_graph_member_selector_dialog.tscn").instantiate();
+	var dialog : ConfirmationDialog = load("res://addons/scene-graphs/scenes/scene_graph_member_selector_dialog.tscn").instantiate();
 	output["dialog"] = dialog;
 	dialog.theme = theme;
 	

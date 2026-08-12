@@ -1,23 +1,23 @@
 ﻿@tool
 extends RefCounted
 
-static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
+static var SceneObjectGraphNode : Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd");
 
 const OBJECT_TYPE_NODE := "node";
 const PORT_COLOR_WILDCARD := Color(0xe0e0e0ff);
 
 const META_NAME_EXTENSION := &"_scene_objects_extension";
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 	editor.connection_drag_started.connect(_on_connection_drag_started);
 	editor.connection_drag_ended.connect(_on_connection_drag_ended);
 	editor.selection_changed_with_script.connect(_on_selection_changed_with_script);
 	editor.delete_nodes_request.connect(_on_delete_nodes_request);
 	
-func get_signal_graph_capabilities() -> Array[String]:
+func get_scene_graph_capabilities() -> Array[String]:
 	return ["configure_capabilities","configure_port_types","populate_graph_nodes_from_view","drag_and_drop","handle_view_object_types","initialize_object_graph_node","create_object_graph_node_slots"];
 
 ### CAPABILITY: configure_capabilities
@@ -181,12 +181,12 @@ func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]
 
 class SceneObjectGraphNodeExtension extends RefCounted:
 	var graph_node : GraphNode;
-	var editor : SignalGraphEditor;
+	var editor : SceneGraphEditor;
 	var hook : Object;
 	
 	var titlebar_extension_stylebox : StyleBoxFlat;
 	
-	func _init(graph_node : GraphNode, editor : SignalGraphEditor, hook : Object) -> void:
+	func _init(graph_node : GraphNode, editor : SceneGraphEditor, hook : Object) -> void:
 		self.graph_node = graph_node;
 		self.editor = editor;
 		self.hook = hook;

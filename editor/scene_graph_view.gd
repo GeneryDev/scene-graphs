@@ -1,9 +1,9 @@
-﻿class_name SignalGraphView 
+﻿class_name SceneGraphView 
 extends RefCounted
 
 signal view_updated();
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 var transactions : Transactions;
 
 var view_rules : Dictionary = {};
@@ -11,7 +11,7 @@ var hook_options : Dictionary = {};
 var scene_data : Dictionary = {};
 var scene_objects : Dictionary = {};
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 	transactions = Transactions.new(editor, self);
 
@@ -123,7 +123,7 @@ func clear_objects(object_type : String) -> void:
 	scene_objects[object_type] = {};
 	
 func _print_unsupported_object_type(object_type : String) -> void:
-	printerr("Graph view object type '" + object_type + "' is not supported by any of the active signal graph editor hooks. Some data may be lost.");
+	printerr("Graph view object type '" + object_type + "' is not supported by any of the active scene graph editor hooks. Some data may be lost.");
 
 func view_object_to_object_key(object_type : String, obj : Object) -> Variant:
 	if !obj: return null;
@@ -161,7 +161,7 @@ func object_key_deserialize(object_type : String, serialized : Variant) -> Varia
 	_print_unsupported_object_type(object_type);
 	return null;
 
-func instantiate_graph_node_for_object(object_type : String, obj : Object, graph_node_script : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd")) -> GraphNode:
+func instantiate_graph_node_for_object(object_type : String, obj : Object, graph_node_script : Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")) -> GraphNode:
 	if !obj: return null;
 	var graph_node : GraphNode = graph_node_script.new(object_type, obj, editor);
 	graph_node.name = _object_to_graph_node_name(object_type, obj);
@@ -348,7 +348,7 @@ func serialize() -> Dictionary:
 	
 	return serialized;
 
-func deserialize(serialized_view : Dictionary) -> SignalGraphView:
+func deserialize(serialized_view : Dictionary) -> SceneGraphView:
 	view_rules = serialized_view.get("view_rules",{}).duplicate(false);
 	hook_options = serialized_view.get("hook_options",{}).duplicate(false);
 	scene_data = serialized_view.get("scene_data",{}).duplicate(false);
@@ -369,7 +369,7 @@ func deserialize(serialized_view : Dictionary) -> SignalGraphView:
 	
 	return self;
 
-func copy_non_scene_data_from(other : SignalGraphView, duplicate_deep : bool = false) -> void:
+func copy_non_scene_data_from(other : SceneGraphView, duplicate_deep : bool = false) -> void:
 	if !other: return;
 	if duplicate_deep:
 		view_rules = other.view_rules.duplicate(true);
@@ -383,10 +383,10 @@ func clear_scene_data() -> void:
 	scene_objects.clear();
 
 class Transactions extends RefCounted:
-	var editor : SignalGraphEditor;
-	var view : SignalGraphView;
+	var editor : SceneGraphEditor;
+	var view : SceneGraphView;
 	
-	func _init(editor : SignalGraphEditor, view : SignalGraphView):
+	func _init(editor : SceneGraphEditor, view : SceneGraphView):
 		self.editor = editor;
 		self.view = view;
 		

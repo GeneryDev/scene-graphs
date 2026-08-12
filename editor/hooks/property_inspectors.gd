@@ -1,7 +1,7 @@
 ﻿@tool
 extends RefCounted
 
-static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
+static var SceneObjectGraphNode : Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd");
 
 const OBJECT_TYPE_NODE := "node";
 const MEMBER_TYPE_PROPERTY := "property";
@@ -9,17 +9,17 @@ const ICON_NAME_PROPERTY := &"MemberProperty";
 
 const META_NAME_EXTENSION := &"_property_inspectors_extension";
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 	
-func get_signal_graph_capabilities() -> Array[String]:
+func get_scene_graph_capabilities() -> Array[String]:
 	return ["initialize_object_graph_node","configure_hook_options","create_object_graph_node_slots","configure_member_selector","claim_object_graph_node_member_slots"];
 
 ### CAPABILITY: configure_hook_options
 func get_hook_options_id() -> String:
-	return "signal_graphs:property_inspectors";
+	return "scene_graphs:property_inspectors";
 
 func get_hook_options_label(options : Options) -> String:
 	if options == null: return "Property Inspectors";
@@ -126,10 +126,10 @@ func get_object_graph_node_member_slot_bid(object_type : String, object : Object
 
 class SceneObjectGraphNodeExtension extends RefCounted:
 	var graph_node : GraphNode;
-	var editor : SignalGraphEditor;
+	var editor : SceneGraphEditor;
 	var hook : Object;
 	
-	func _init(graph_node : GraphNode, editor : SignalGraphEditor, hook : Object) -> void:
+	func _init(graph_node : GraphNode, editor : SceneGraphEditor, hook : Object) -> void:
 		self.graph_node = graph_node;
 		self.editor = editor;
 		self.hook = hook;

@@ -1,5 +1,5 @@
 ﻿@tool
-class_name SignalGraphEditor
+class_name SceneGraphEditor
 extends GraphEdit
 
 signal connections_changed();
@@ -14,11 +14,11 @@ var selected_nodes : Array[StringName] = [];
 var dragging : bool = false;
 
 var interface_signals : InterfaceSignals;
-var member_selector : SignalGraphMemberSelector;
+var member_selector : SceneGraphMemberSelector;
 var arranger : Arranger;
 var hooks : Hooks;
 
-var current_view : SignalGraphView:
+var current_view : SceneGraphView:
 	get:
 		return current_view;
 	set(value):
@@ -38,7 +38,7 @@ var _pending_initial_draw := false;
 
 func _init():
 	interface_signals = InterfaceSignals.new(self);
-	member_selector = SignalGraphMemberSelector.new(self);
+	member_selector = SceneGraphMemberSelector.new(self);
 	arranger = Arranger.new(self);
 	
 	connections_layer = get_node(^"_connection_layer");
@@ -65,8 +65,8 @@ func clear():
 	selected_nodes.clear();
 	notify_selection_changed();
 
-func load(view : SignalGraphView) -> void:
-	assert(view != null, "Cannot load a null signal graph view");
+func load(view : SceneGraphView) -> void:
+	assert(view != null, "Cannot load a null scene graph view");
 	current_view = view;
 	if view:
 		view.update_object_views_with_rules();
@@ -117,12 +117,12 @@ func port_type(name : StringName) -> int:
 	if _port_types_by_name.has(name):
 		return _port_types_by_name[name];
 	else:
-		printerr("No such signal graph port type name '" + str(name) + "'");
+		printerr("No such scene graph port type name '" + str(name) + "'");
 		return -2;
 
 func register_port_type(name : StringName) -> int:
 	if _port_types_by_name.has(name):
-		printerr("Signal graph port type '" + str(name) + "' has already been defined!");
+		printerr("Scene graph port type '" + str(name) + "' has already been defined!");
 		return _port_types_by_name[name];
 	var idx := _next_port_type_idx;
 	_next_port_type_idx += 1;
@@ -243,8 +243,8 @@ func check_connection_port_types(connection : Dictionary, from_port_type : int, 
 ### HOOKS
 
 class Hooks extends RefCounted:
-	const METHOD_NAME_GET_CAPABILITIES : StringName = &"get_signal_graph_capabilities"
-	const META_NAME_GRANTED_CAPABILITIES : StringName = &"_signal_graph_granted_capabilities"
+	const METHOD_NAME_GET_CAPABILITIES : StringName = &"get_scene_graph_capabilities"
+	const META_NAME_GRANTED_CAPABILITIES : StringName = &"_scene_graph_granted_capabilities"
 	var _capabilities : Dictionary = {
 		"configure_capabilities": {
 			"required_methods": [
@@ -347,10 +347,10 @@ class Hooks extends RefCounted:
 		}
 	};
 	
-	var editor : SignalGraphEditor;
+	var editor : SceneGraphEditor;
 	var _hooks : Array[Object];
 	
-	func _init(editor : SignalGraphEditor):
+	func _init(editor : SceneGraphEditor):
 		self.editor = editor;
 		
 		_add_builtin_hooks();
@@ -365,24 +365,24 @@ class Hooks extends RefCounted:
 			_init_hook(hook);
 		
 	func _add_builtin_hooks() -> void:
-		add_hook(load("res://addons/signal-graphs/editor/hooks/scene_objects.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/methods_and_signals.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/node_references.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/property_inspectors.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/connection_handles.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/scene_objects.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/methods_and_signals.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/node_references.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/property_inspectors.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/connection_handles.gd"));
 		
-		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/nodes.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/connected_methods_and_signals.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/node_reference_properties.gd"));
-		add_hook(load("res://addons/signal-graphs/editor/hooks/view_rules/members_by_name.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/view_rules/nodes.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/view_rules/connected_methods_and_signals.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/view_rules/node_reference_properties.gd"));
+		add_hook(load("res://addons/scene-graphs/editor/hooks/view_rules/members_by_name.gd"));
 		
 	func add_hook(script : Script) -> bool:
 		var instance : Object = script.new(editor);
 		if !instance:
-			printerr("Failed to instantiate script " + script.resource_path + " as a signal graph hook: Requires a constructor that takes 1 argument.");
+			printerr("Failed to instantiate script " + script.resource_path + " as a scene graph hook: Requires a constructor that takes 1 argument.");
 			return false;
 		if !instance.has_method(METHOD_NAME_GET_CAPABILITIES):
-			printerr("Could not add script " + script.resource_path + " as a signal graph hook: Does not implement required method '" + str(METHOD_NAME_GET_CAPABILITIES) + "'");
+			printerr("Could not add script " + script.resource_path + " as a scene graph hook: Does not implement required method '" + str(METHOD_NAME_GET_CAPABILITIES) + "'");
 			return false;
 		
 		_hooks.append(instance);
@@ -414,7 +414,7 @@ class Hooks extends RefCounted:
 			if _validate_capability(instance, script, capability):
 				_grant_capability(instance, script, capability);
 			
-		print("Initialized signal graph hook script: " + script.resource_path + " with capabilities: " + str(_get_granted_capabilities(instance)));
+		print("Initialized scene graph hook script: " + script.resource_path + " with capabilities: " + str(_get_granted_capabilities(instance)));
 		return true;
 	
 	func _is_meta_capability(capability : String) -> bool:
@@ -422,22 +422,22 @@ class Hooks extends RefCounted:
 	
 	func _validate_capability(instance : Object, script : Script, capability : String) -> bool:
 		if !_capabilities.has(capability):
-			printerr("Invalid signal graph hook capability '" + capability + "' in script " + script.resource_path);
+			printerr("Invalid scene graph hook capability '" + capability + "' in script " + script.resource_path);
 			return false;
 		var list : Array[Object] = _capabilities[capability].hooks;
 		if list.has(instance):
-			printerr("Duplicate signal graph hook capability '" + capability + "' in script " + script.resource_path);
+			printerr("Duplicate scene graph hook capability '" + capability + "' in script " + script.resource_path);
 			return false;
 		var required_methods : Array = _capabilities[capability].required_methods;
 		var missing_any := false;
 		for required_method_name : StringName in required_methods:
 			if !instance.has_method(required_method_name):
-				printerr("Missing method '" + str(required_method_name) + "', required for signal graph hook capability '" + capability + "' in script " + script.resource_path);
+				printerr("Missing method '" + str(required_method_name) + "', required for scene graph hook capability '" + capability + "' in script " + script.resource_path);
 				missing_any = true;
 				continue;
 		
 		if missing_any:
-			printerr("Skipping signal graph hook capability '" + capability + "' in script " + script.resource_path + " due to missing required methods.");
+			printerr("Skipping scene graph hook capability '" + capability + "' in script " + script.resource_path + " due to missing required methods.");
 			return false;
 		
 		return true;
@@ -498,9 +498,9 @@ class Utility extends RefCounted:
 ### INTERFACE SIGNALS
 
 class InterfaceSignals extends RefCounted:
-	var editor : SignalGraphEditor;
+	var editor : SceneGraphEditor;
 	
-	func _init(editor : SignalGraphEditor):
+	func _init(editor : SceneGraphEditor):
 		self.editor = editor;
 
 	func connect_all() -> void:
@@ -558,11 +558,11 @@ class InterfaceSignals extends RefCounted:
 ### Arranger
 
 class Arranger extends RefCounted:
-	var editor : SignalGraphEditor;
+	var editor : SceneGraphEditor;
 	
 	var _queued_for_arrange : Array = [];
 	
-	func _init(editor : SignalGraphEditor):
+	func _init(editor : SceneGraphEditor):
 		self.editor = editor;
 	
 	func queue_arrange(node : GraphElement) -> void:

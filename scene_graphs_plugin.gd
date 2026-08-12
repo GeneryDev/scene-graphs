@@ -6,14 +6,14 @@ signal plugin_disabled();
 signal editor_layout_saving();
 signal editor_layout_loading();
 
-const PLUGIN_ROOT := "res://addons/signal-graphs";
+const PLUGIN_ROOT := "res://addons/scene-graphs";
 
 enum PluginMode {
 	MainScreen,
 	EditorDock
 };
 
-var graph_editor_template : PackedScene = preload(PLUGIN_ROOT + "/scenes/signal_graph_editor.tscn");
+var graph_editor_template : PackedScene = preload(PLUGIN_ROOT + "/scenes/scene_graph_editor.tscn");
 var _dock : EditorDock;
 
 var settings : Settings;
@@ -69,8 +69,8 @@ func _set_window_layout(configuration: ConfigFile) -> void:
 	editor_layout_loading.emit();
 
 func reload() -> void:
-	EditorInterface.call_deferred(&"set_plugin_enabled", "signal-graphs", false);
-	EditorInterface.call_deferred(&"set_plugin_enabled", "signal-graphs", true);
+	EditorInterface.call_deferred(&"set_plugin_enabled", "scene-graphs", false);
+	EditorInterface.call_deferred(&"set_plugin_enabled", "scene-graphs", true);
 	
 func _enable_plugin() -> void:
 	plugin_enabled.emit();
@@ -90,9 +90,9 @@ func _get_plugin_icon() -> Texture2D:
 	return EditorInterface.get_editor_theme().get_icon("Signals", "EditorIcons");
 
 class Settings extends RefCounted:
-	const PROJECT_SETTING_PLUGIN_MODE := &"signal_graphs/editor/plugin_mode";
-	const PROJECT_SETTING_HOOK_SCRIPTS := &"signal_graphs/editor/hook_scripts";
-	const PROJECT_SETTING_DEV_MODE := &"signal_graphs/editor/dev_mode";
+	const PROJECT_SETTING_PLUGIN_MODE := &"scene_graphs/editor/plugin_mode";
+	const PROJECT_SETTING_HOOK_SCRIPTS := &"scene_graphs/editor/hook_scripts";
+	const PROJECT_SETTING_DEV_MODE := &"scene_graphs/editor/dev_mode";
 	const ALL_PROJECT_SETTINGS := [PROJECT_SETTING_PLUGIN_MODE, PROJECT_SETTING_HOOK_SCRIPTS, PROJECT_SETTING_DEV_MODE];
 	
 	signal plugin_mode_changed(mode : PluginMode);
@@ -185,9 +185,9 @@ class Settings extends RefCounted:
 				plugin.reload();
 
 class Persistence extends RefCounted:
-	const CONFIG_SECTION_NAME := "Signal Graph";
-	const SCENE_STATE_DIR := "res://.godot/signal_graphs";
-	const EDITOR_STATE_FILE := "res://.godot/signal_graphs/editor_state.cfg";
+	const CONFIG_SECTION_NAME := "Scene Graph";
+	const SCENE_STATE_DIR := "res://.godot/scene_graphs";
+	const EDITOR_STATE_FILE := "res://.godot/scene_graphs/editor_state.cfg";
 
 	var plugin : EditorPlugin;
 	

@@ -1,7 +1,7 @@
 ﻿@tool
 extends EditorDock
 
-@export var editor : SignalGraphEditor;
+@export var editor : SceneGraphEditor;
 @export var view_manager : Node;
 
 var plugin : EditorPlugin;

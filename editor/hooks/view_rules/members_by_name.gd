@@ -5,16 +5,16 @@ const MEMBER_TYPE_PROPERTY := "property";
 const MEMBER_TYPE_METHOD := "method";
 const MEMBER_TYPE_SIGNAL := "signal";
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 	
-func get_signal_graph_capabilities() -> Array[String]:
+func get_scene_graph_capabilities() -> Array[String]:
 	return ["view_rule.member_source"];
 
 func get_view_rule_id() -> String:
-	return "signal_graphs:members_by_name";
+	return "scene_graphs:members_by_name";
 
 func get_view_rule_label(params : Params) -> String:
 	var label := "";

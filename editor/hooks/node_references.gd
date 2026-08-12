@@ -1,7 +1,7 @@
 ﻿@tool
 extends RefCounted
 
-static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
+static var SceneObjectGraphNode : Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd");
 
 const OBJECT_TYPE_NODE := "node";
 const MEMBER_TYPE_PROPERTY := "property";
@@ -12,15 +12,15 @@ const META_NAME_EXTENSION := &"_node_references_extension";
 
 signal scene_connections_updated();
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 	
 	scene_connections_updated.connect(_on_scene_connections_updated);
 	connect_interface_signals();
 	
-func get_signal_graph_capabilities() -> Array[String]:
+func get_scene_graph_capabilities() -> Array[String]:
 	return ["configure_port_types","configure_hook_options","populate_graph_node_connections","initialize_object_graph_node","create_object_graph_node_slots","draw_object_graph_node_port","claim_object_graph_node_member_slots"];
 
 ### CAPABILITY: configure_ports
@@ -31,7 +31,7 @@ func configure_port_types() -> void:
 
 ### CAPABILITY: configure_hook_options
 func get_hook_options_id() -> String:
-	return "signal_graphs:node_references";
+	return "scene_graphs:node_references";
 
 func get_hook_options_label(options : Options) -> String:
 	if options == null: return "Node References";
@@ -195,10 +195,10 @@ class Utility extends RefCounted:
 
 class SceneObjectGraphNodeExtension extends RefCounted:
 	var graph_node : GraphNode;
-	var editor : SignalGraphEditor;
+	var editor : SceneGraphEditor;
 	var hook : Object;
 	
-	func _init(graph_node : GraphNode, editor : SignalGraphEditor, hook : Object) -> void:
+	func _init(graph_node : GraphNode, editor : SceneGraphEditor, hook : Object) -> void:
 		self.graph_node = graph_node;
 		self.editor = editor;
 		self.hook = hook;

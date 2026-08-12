@@ -6,7 +6,7 @@ signal repositioned();
 const INTERACTION_RADIUS := 16;
 const VISUAL_RADIUS : float = 6;
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 var graph_connection : Dictionary;
 var member_connection : Dictionary;
 var bg_color := Color.BLACK;
@@ -18,7 +18,7 @@ var dragging_reference_mid_point : Vector2;
 var dragging_mid_point_influence : float = 1;
 var _building_from_view := false;
 
-func _init(graph_connection : Dictionary, member_connection : Dictionary, editor : SignalGraphEditor) -> void:
+func _init(graph_connection : Dictionary, member_connection : Dictionary, editor : SceneGraphEditor) -> void:
 	self.editor = editor;
 	resizable = false;
 	draggable = true;

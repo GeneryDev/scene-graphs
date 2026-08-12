@@ -1,7 +1,7 @@
 ﻿@tool
 extends Node
 
-@export var editor : SignalGraphEditor;
+@export var editor : SceneGraphEditor;
 
 const COL_MAIN : int = 0;
 const COL_BUTTONS : int = 1;
@@ -9,26 +9,26 @@ const COL_BUTTONS : int = 1;
 const default_views : Dictionary = {
 	"Default: Signals": {
 		"hook_options": {
-			"signal_graphs:methods_and_signals": {
+			"scene_graphs:methods_and_signals": {
 				"enable_method_and_signal_ports": true
 			},
-			"signal_graphs:property_inspectors": {
+			"scene_graphs:property_inspectors": {
 				"enable_property_inspectors": false
 			},
-			"signal_graphs:node_references": {
+			"scene_graphs:node_references": {
 				"enable_node_reference_ports": true
 			}
 		},
 		"view_rules": {
 			"member_source": [
 				{
-					"id": "signal_graphs:connected_methods_and_signals",
+					"id": "scene_graphs:connected_methods_and_signals",
 					"params": {}
 				}
 			],
 			"object_source": [
 				{
-					"id": "signal_graphs:nodes",
+					"id": "scene_graphs:nodes",
 					"params": {
 						"require_connections": true
 					}
@@ -38,26 +38,26 @@ const default_views : Dictionary = {
 	},
 	"Default: Node References": {
 		"hook_options": {
-			"signal_graphs:methods_and_signals": {
+			"scene_graphs:methods_and_signals": {
 				"enable_method_and_signal_ports": false
 			},
-			"signal_graphs:property_inspectors": {
+			"scene_graphs:property_inspectors": {
 				"enable_property_inspectors": false
 			},
-			"signal_graphs:node_references": {
+			"scene_graphs:node_references": {
 				"enable_node_reference_ports": true
 			}
 		},
 		"view_rules": {
 			"member_source": [
 				{
-					"id": "signal_graphs:node_reference_properties",
+					"id": "scene_graphs:node_reference_properties",
 					"params": {}
 				}
 			],
 			"object_source": [
 				{
-					"id": "signal_graphs:nodes",
+					"id": "scene_graphs:nodes",
 					"params": {
 						"require_connections": true
 					}
@@ -71,7 +71,7 @@ var global_views : Dictionary = {}
 var local_views : Dictionary = {}
 
 var active_local_view_metadata : Dictionary = {};
-var active_local_view : SignalGraphView;
+var active_local_view : SceneGraphView;
 
 var edit_views_dialog : EditViewsDialog;
 
@@ -112,7 +112,7 @@ func restore_scene_state(scene_states : Dictionary) -> void:
 	if scene_state.has("local_views"):
 		for view_name in scene_state.local_views:
 			var view_value = scene_state.local_views[view_name];
-			local_views[view_name] = view_value if view_value is SignalGraphView else SignalGraphView.new(editor).deserialize(scene_state.local_views[view_name]);
+			local_views[view_name] = view_value if view_value is SceneGraphView else SceneGraphView.new(editor).deserialize(scene_state.local_views[view_name]);
 	
 	repopulate_view_dropdown();
 	
@@ -127,14 +127,14 @@ func serialize_editor_state() -> Dictionary:
 		"global_views": {}
 	};
 	for view_name in global_views:
-		serialized_editor_state.global_views[view_name] = (global_views[view_name] as SignalGraphView).serialize();
+		serialized_editor_state.global_views[view_name] = (global_views[view_name] as SceneGraphView).serialize();
 	return serialized_editor_state;
 
 func deserialize_editor_state(serialized_editor_state : Dictionary) -> void:
 	global_views.clear();
 	if serialized_editor_state.has("global_views"):
 		for view_name in serialized_editor_state.global_views:
-			global_views[view_name] = SignalGraphView.new(editor).deserialize(serialized_editor_state.global_views[view_name]);
+			global_views[view_name] = SceneGraphView.new(editor).deserialize(serialized_editor_state.global_views[view_name]);
 	
 	repopulate_view_dropdown();
 	
@@ -173,26 +173,26 @@ func set_view_dropdown(dropdown : OptionButton, metadata : Dictionary) -> void:
 				dropdown.select(item_idx);
 			break;
 
-func get_localized_view(view_name : String) -> SignalGraphView:
+func get_localized_view(view_name : String) -> SceneGraphView:
 	if local_views.has(view_name):
 		return local_views[view_name];
 	else:
 		return null;
 
-func localize_global_view(view_name : String) -> SignalGraphView:
-	var global_view : SignalGraphView = global_views[view_name];
-	var existing_local_view : SignalGraphView;
+func localize_global_view(view_name : String) -> SceneGraphView:
+	var global_view : SceneGraphView = global_views[view_name];
+	var existing_local_view : SceneGraphView;
 	if local_views.has(view_name):
 		existing_local_view = local_views[view_name];
 	else:
-		existing_local_view = SignalGraphView.new(editor);
+		existing_local_view = SceneGraphView.new(editor);
 	existing_local_view.copy_non_scene_data_from(global_view);
 	local_views[view_name] = existing_local_view;
 	return existing_local_view;
 
-func globalize_local_view(view_name : String) -> SignalGraphView:
-	var local_view : SignalGraphView = local_views[view_name];
-	var globalized_view := SignalGraphView.new(editor);
+func globalize_local_view(view_name : String) -> SceneGraphView:
+	var local_view : SceneGraphView = local_views[view_name];
+	var globalized_view := SceneGraphView.new(editor);
 	globalized_view.copy_non_scene_data_from(local_view);
 	global_views[view_name] = globalized_view;
 	return globalized_view;
@@ -222,7 +222,7 @@ func activate_view(metadata : Dictionary) -> void:
 	editor.load(active_local_view);
 	set_view_dropdown(%"View Dropdown", metadata);
 
-func get_view(metadata : Dictionary) -> SignalGraphView:
+func get_view(metadata : Dictionary) -> SceneGraphView:
 	match metadata.view_type:
 		"global":
 			return global_views[metadata.view_name];
@@ -255,13 +255,13 @@ func repopulate_view_dropdown() -> void:
 	populate_view_dropdown(view_dropdown);
 	set_view_dropdown(view_dropdown, active_local_view_metadata);
 
-func create_view(metadata : Dictionary, from_existing_view : SignalGraphView = null) -> Dictionary:
+func create_view(metadata : Dictionary, from_existing_view : SceneGraphView = null) -> Dictionary:
 	var view_name : String = metadata.view_name;
 	if view_name_exists(view_name):
 		EditorInterface.get_editor_toaster().push_toast("Cannot create view: name '" + view_name + "' is already taken.", EditorToaster.SEVERITY_ERROR);
 		return metadata;
 	var view_type : String = metadata.view_type;
-	var new_view := SignalGraphView.new(editor);
+	var new_view := SceneGraphView.new(editor);
 	if from_existing_view:
 		new_view.copy_non_scene_data_from(from_existing_view, true);
 	sanitize_view_rules(new_view);
@@ -338,12 +338,12 @@ func create_default_views() -> Dictionary:
 			"view_type": "global"
 		};
 		var serialized_view_data : Dictionary = default_views[name];
-		metadata = create_view(metadata, SignalGraphView.new(editor).deserialize(serialized_view_data));
+		metadata = create_view(metadata, SceneGraphView.new(editor).deserialize(serialized_view_data));
 		if !first_metadata:
 			first_metadata = metadata;
 	return first_metadata;
 
-func sanitize_view_rules(view : SignalGraphView) -> void:
+func sanitize_view_rules(view : SceneGraphView) -> void:
 	if !view: return;
 	view.view_rules.get_or_add("object_source", []);
 	view.view_rules.get_or_add("member_source", []);
@@ -383,13 +383,13 @@ class EditViewsDialog extends RefCounted:
 
 	var _active : Dictionary;
 	
-	var editor : SignalGraphEditor;
+	var editor : SceneGraphEditor;
 	var view_manager : Object;
 	
-	var editing_view : SignalGraphView;
+	var editing_view : SceneGraphView;
 	var editing_view_metadata : Dictionary;
 	
-	func _init(editor : SignalGraphEditor, view_manager : Object):
+	func _init(editor : SceneGraphEditor, view_manager : Object):
 		self.editor = editor;
 		self.view_manager = view_manager;
 	
@@ -456,7 +456,7 @@ class EditViewsDialog extends RefCounted:
 		var scene_name_label : Label = _active["scene_name_label"];
 		scene_name_label.text = "This Scene (" + editor.scene_root.scene_file_path.get_file() + ")";
 		
-		var localized_view : SignalGraphView = view_manager.get_localized_view(metadata.view_name);
+		var localized_view : SceneGraphView = view_manager.get_localized_view(metadata.view_name);
 		
 		_active["graph_node_count_label"].text = str(localized_view.get_scene_object_count()) if localized_view && localized_view.has_any_scene_data() else "Unknown";
 	
@@ -589,7 +589,7 @@ class EditViewsDialog extends RefCounted:
 		var rule_index : int = metadata.rule_index;
 		var rule_arr : Array = editing_view.view_rules[rule_type];
 		var rule_obj = rule_arr[rule_index];
-		var dialog : Window = load("res://addons/signal-graphs/scenes/signal_graph_view_rule_edit_dialog.tscn").instantiate();
+		var dialog : Window = load("res://addons/scene-graphs/scenes/scene_graph_view_rule_edit_dialog.tscn").instantiate();
 		var hook : Object = editor.current_view.get_view_rule_hook(rule_obj.id, rule_type);
 		dialog.setup(rule_type, editor.current_view.get_view_rule_hooks(rule_type), hook, editor.current_view.rule_params_from_dict(hook, rule_obj.get("params") as Dictionary));
 		dialog.rule_selected.connect(func (selected_hook : Object, selected_params : Variant) -> void:
@@ -603,7 +603,7 @@ class EditViewsDialog extends RefCounted:
 	
 	func add_rule(rule_type : String) -> void:
 		var rule_arr : Array = editing_view.view_rules[rule_type];
-		var dialog : Window = load("res://addons/signal-graphs/scenes/signal_graph_view_rule_edit_dialog.tscn").instantiate();
+		var dialog : Window = load("res://addons/scene-graphs/scenes/scene_graph_view_rule_edit_dialog.tscn").instantiate();
 		dialog.setup(rule_type, editor.current_view.get_view_rule_hooks(rule_type), null, null);
 		dialog.rule_selected.connect(func (selected_hook : Object, selected_params : Variant) -> void:
 			rule_arr.append({
@@ -623,7 +623,7 @@ class EditViewsDialog extends RefCounted:
 	
 	func edit_hook_options(metadata : Dictionary) -> void:
 		var hook : Object = metadata.hook;
-		var dialog : Window = load("res://addons/signal-graphs/scenes/signal_graph_hook_option_edit_dialog.tscn").instantiate();
+		var dialog : Window = load("res://addons/scene-graphs/scenes/scene_graph_hook_option_edit_dialog.tscn").instantiate();
 		dialog.setup(hook, editing_view.get_hook_options(hook));
 		dialog.finished.connect(func (selected_hook : Object, selected_options : Variant) -> void:
 			var id : String = hook.get_hook_options_id();
@@ -641,7 +641,7 @@ class EditViewsDialog extends RefCounted:
 		};
 		var theme := EditorInterface.get_editor_theme();
 		
-		var dialog : AcceptDialog = load("res://addons/signal-graphs/scenes/signal_graph_view_manager_dialog.tscn").instantiate();
+		var dialog : AcceptDialog = load("res://addons/scene-graphs/scenes/scene_graph_view_manager_dialog.tscn").instantiate();
 		output["dialog"] = dialog;
 		dialog.theme = theme;
 		

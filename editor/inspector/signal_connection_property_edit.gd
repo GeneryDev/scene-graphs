@@ -10,14 +10,14 @@ var _append_source : Variant;
 var _unbind_signal_arguments : Variant;
 var _bound_signal_arguments : Variant;
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 var object_connection_pairs : Array[ObjectConnectionPair] = [];
 var setup_complete := false;
 
 var multiple : bool:
 	get: return object_connection_pairs.size() > 1;
 
-func setup(editor : SignalGraphEditor, graph_connections : Array) -> void:
+func setup(editor : SceneGraphEditor, graph_connections : Array) -> void:
 	self.editor = editor;
 	var is_first_entry := true;
 	for graph_connection in graph_connections:

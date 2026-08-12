@@ -4,16 +4,16 @@ extends RefCounted
 const OBJECT_TYPE_NODE := "node";
 
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 	
-func get_signal_graph_capabilities() -> Array[String]:
+func get_scene_graph_capabilities() -> Array[String]:
 	return ["view_rule.object_source"];
 
 func get_view_rule_id() -> String:
-	return "signal_graphs:nodes";
+	return "scene_graphs:nodes";
 
 func get_view_rule_label(params : Params) -> String:
 	if params == null:

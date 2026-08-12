@@ -1,13 +1,13 @@
 ﻿@tool
 extends RefCounted
 
-static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
-static var ConnectionHandleElement : Script = preload("res://addons/signal-graphs/editor/elements/connection_handle_element.gd");
+static var SceneObjectGraphNode : Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd");
+static var ConnectionHandleElement : Script = preload("res://addons/scene-graphs/editor/elements/connection_handle_element.gd");
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 var _connections_with_elements : Array[Dictionary] = [];
 
-func _init(editor : SignalGraphEditor):
+func _init(editor : SceneGraphEditor):
 	self.editor = editor;
 	
 	editor.connection_line_cache_invalidated.connect(_invalidate_line_end_cache);
@@ -17,7 +17,7 @@ func _init(editor : SignalGraphEditor):
 	editor.end_node_move.connect(_on_end_node_move);
 	editor.visibility_changed.connect(_on_visibility_changed);
 	
-func get_signal_graph_capabilities() -> Array[String]:
+func get_scene_graph_capabilities() -> Array[String]:
 	return ["configure_capabilities","configure_hook_options","override_connection_lines","view_serialization"];
 	
 ### CAPABILITY: configure_capabilities
@@ -27,7 +27,7 @@ func configure_capabilities() -> void:
 
 ### CAPABILITY: configure_hook_options
 func get_hook_options_id() -> String:
-	return "signal_graphs:connection_handles";
+	return "scene_graphs:connection_handles";
 
 func get_hook_options_label(options : Options) -> String:
 	if options == null: return "Connection Handles";
@@ -291,7 +291,7 @@ func edit_serialized_view(serialized : Dictionary) -> void:
 							continue;
 				# invalid
 				handles.remove_at(handle_index);
-func edit_deserialized_view(view : SignalGraphView) -> void:
+func edit_deserialized_view(view : SceneGraphView) -> void:
 	for object_type in view.scene_objects:
 		var objects_for_type : Dictionary = view.scene_objects[object_type];
 		for object_key in objects_for_type:

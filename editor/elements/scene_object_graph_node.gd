@@ -3,14 +3,14 @@
 var object_type : String;
 var obj : Object;
 
-var editor : SignalGraphEditor;
+var editor : SceneGraphEditor;
 var _member_cache : Dictionary = {};
 var user_size : Vector2;
 
 var _last_built_view : Dictionary = {};
 var _building_from_view := false;
 
-func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
+func _init(object_type : String, obj : Object, editor : SceneGraphEditor):
 	self.editor = editor;
 	self.object_type = object_type;
 	self.obj = obj;
@@ -19,7 +19,7 @@ func _init(object_type : String, obj : Object, editor : SignalGraphEditor):
 	
 	title = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 	
-	var icon := SignalGraphEditor.Utility.get_object_icon(obj);
+	var icon := SceneGraphEditor.Utility.get_object_icon(obj);
 	if icon:
 		var icon_rect := TextureRect.new();
 		icon_rect.texture = icon;

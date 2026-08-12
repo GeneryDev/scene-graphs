@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://ronsawixom53"]
 
-[node name="Signal Graph View Dialog" type="AcceptDialog" unique_id=423649529]
+[node name="Scene Graph View Dialog" type="AcceptDialog" unique_id=423649529]
 oversampling_override = 1.0
-title = "Edit Signal Graph Views"
+title = "Edit Scene Graph Views"
 position = Vector2i(0, 36)
 size = Vector2i(720, 500)
 visible = true

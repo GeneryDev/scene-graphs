@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://1mi2njpt5jwi"]
 
-[ext_resource type="Script" uid="uid://hc26dyjrynne" path="res://addons/signal-graphs/editor/signal_graph_editor.gd" id="1_bwmb2"]
-[ext_resource type="Script" uid="uid://camepk4lkae85" path="res://addons/signal-graphs/editor/signal_graph_editor_root.gd" id="1_unvls"]
-[ext_resource type="Script" uid="uid://cip3hjy77h2ec" path="res://addons/signal-graphs/editor/signal_graph_view_manager.gd" id="2_8syjn"]
+[ext_resource type="Script" uid="uid://hc26dyjrynne" path="res://addons/scene-graphs/editor/scene_graph_editor.gd" id="1_bwmb2"]
+[ext_resource type="Script" uid="uid://camepk4lkae85" path="res://addons/scene-graphs/editor/scene_graph_editor_root.gd" id="1_unvls"]
+[ext_resource type="Script" uid="uid://cip3hjy77h2ec" path="res://addons/scene-graphs/editor/scene_graph_view_manager.gd" id="2_8syjn"]
 
-[node name="SignalGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor", "view_manager")]
+[node name="SceneGraphEditor" type="EditorDock" unique_id=2142569254 node_paths=PackedStringArray("editor", "view_manager")]
 custom_minimum_size = Vector2(200, 200)
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,8 +13,8 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-title = "Signal Graph"
-layout_key = "signal_graph"
+title = "Scene Graph"
+layout_key = "scene_graph"
 icon_name = &"Signals"
 default_slot = 8
 available_layouts = 7
