@@ -4,8 +4,8 @@ extends RefCounted
 static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
 
 const OBJECT_TYPE_NODE := "node";
-const MEMBER_TYPE_PROPERTY := "properties";
-const MEMBER_TYPE_NODE_REFERENCE_OUT := "node_references_out";
+const MEMBER_TYPE_PROPERTY := "property";
+const MEMBER_TYPE_NODE_REFERENCE_OUT := "node_reference_out";
 const PORT_COLOR_NODE_REFERENCE := Color(0x0067ffff);
 
 const META_NAME_EXTENSION := &"_node_references_extension";

@@ -4,7 +4,7 @@ extends RefCounted
 static var SceneObjectGraphNode : Script = preload("res://addons/signal-graphs/editor/elements/scene_object_graph_node.gd");
 
 const OBJECT_TYPE_NODE := "node";
-const MEMBER_TYPE_PROPERTY := "properties";
+const MEMBER_TYPE_PROPERTY := "property";
 const ICON_NAME_PROPERTY := &"MemberProperty";
 
 const META_NAME_EXTENSION := &"_property_inspectors_extension";

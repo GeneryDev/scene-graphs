@@ -7,8 +7,8 @@ static var SignalConnectionPropertyEdit : Script = preload("res://addons/signal-
 
 const OBJECT_TYPE_NODE := "node";
 const OBJECT_TYPE_OTHER := "other"; # temporary placeholder for non-node object types
-const MEMBER_TYPE_METHOD := "methods";
-const MEMBER_TYPE_SIGNAL := "signals";
+const MEMBER_TYPE_METHOD := "method";
+const MEMBER_TYPE_SIGNAL := "signal";
 const PORT_COLOR_METHOD := Color(0x73f280ff);
 const PORT_COLOR_SIGNAL := Color(0xff786bff);
 

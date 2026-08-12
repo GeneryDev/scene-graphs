@@ -1,9 +1,9 @@
 ﻿@tool
 extends RefCounted
 
-const MEMBER_TYPE_PROPERTY := "properties";
-const MEMBER_TYPE_METHOD := "methods";
-const MEMBER_TYPE_SIGNAL := "signals";
+const MEMBER_TYPE_PROPERTY := "property";
+const MEMBER_TYPE_METHOD := "method";
+const MEMBER_TYPE_SIGNAL := "signal";
 
 var editor : SignalGraphEditor;
 

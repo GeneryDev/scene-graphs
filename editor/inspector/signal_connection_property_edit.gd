@@ -1,8 +1,8 @@
 extends Resource
 @export var info : String = "";
 
-const MEMBER_TYPE_METHOD := "methods";
-const MEMBER_TYPE_SIGNAL := "signals";
+const MEMBER_TYPE_METHOD := "method";
+const MEMBER_TYPE_SIGNAL := "signal";
 
 var _deferred : Variant;
 var _one_shot : Variant;

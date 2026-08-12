@@ -1,8 +1,8 @@
 ﻿@tool
 extends RefCounted
 
-const MEMBER_TYPE_NODE_REFERENCE_OUT := "node_references_out";
-const MEMBER_TYPE_PROPERTY := "properties";
+const MEMBER_TYPE_NODE_REFERENCE_OUT := "node_reference_out";
+const MEMBER_TYPE_PROPERTY := "property";
 
 var editor : SignalGraphEditor;
 
