@@ -109,17 +109,21 @@ func _collect_members(obj : Object, script_getter : StringName, class_getter : S
 	
 	return list;
 
+func is_enabled() -> bool:
+	return editor.current_view.get_hook_options(self).enable_property_inspectors;
+
 # CAPABILITY: initialize_object_graph_node
 func initialize_object_graph_node(graph_node : GraphNode) -> void:
 	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self));
 		
 # CAPABILITY: create_object_graph_node_slots
 func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]:
-	if !editor.current_view.get_hook_options(self).enable_property_inspectors: return [];
+	if !is_enabled(): return [];
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
 
 ### CAPABILITY: claim_object_graph_node_member_slots
 func get_object_graph_node_member_slot_bid(object_type : String, object : Object, member_type : String, member_name : StringName) -> float:
+	if !is_enabled(): return 0;
 	if member_type == MEMBER_TYPE_PROPERTY:
 		return 1;
 	return 0;

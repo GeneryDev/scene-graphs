@@ -159,6 +159,9 @@ func _on_connections_changed() -> void:
 #	for child : Node in editor.get_children():
 #		if !is_instance_of(child, SceneObjectGraphNode):
 #			continue;
+
+func is_enabled() -> bool:
+	return editor.current_view.get_hook_options(self).enable_node_reference_ports;
 		
 # CAPABILITY: initialize_object_graph_node
 func initialize_object_graph_node(graph_node : GraphNode) -> void:
@@ -166,7 +169,7 @@ func initialize_object_graph_node(graph_node : GraphNode) -> void:
 		
 # CAPABILITY: create_object_graph_node_slots
 func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]:
-	if !editor.current_view.get_hook_options(self).enable_node_reference_ports: return [];
+	if !is_enabled(): return [];
 	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
 		
 # CAPABILITY: create_object_graph_node_slots
@@ -175,6 +178,7 @@ func draw_object_graph_node_port(graph_node : GraphNode, slot_index: int, positi
 
 ### CAPABILITY: claim_object_graph_node_member_slots
 func get_object_graph_node_member_slot_bid(object_type : String, object : Object, member_type : String, member_name : StringName) -> float:
+	if !is_enabled(): return 0;
 	if member_type == MEMBER_TYPE_PROPERTY && Utility.is_property_node_reference(Utility.get_property_info_by_name(object, member_name)):
 		return 2;
 	return 0;
