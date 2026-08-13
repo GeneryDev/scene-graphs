@@ -128,7 +128,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 		undo_redo.commit_action();
 	elif port_pair == [editor.port_type(&"wildcard_out"), editor.port_type(&"method")]:
 		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_METHOD).member_name);
-		editor.member_selector.show(from_graph_node.object_type, from_object, [MEMBER_TYPE_SIGNAL], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
+		editor.member_selector.show_single_select(from_graph_node.object_type, from_object, [MEMBER_TYPE_SIGNAL], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
 			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
 			var signal_name = selected_member;
 			
@@ -142,7 +142,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 		);
 	elif port_pair == [editor.port_type(&"signal"), editor.port_type(&"wildcard_in")]:
 		var signal_name : StringName = from_graph_node.get_member_from_port_id(from_port, MEMBER_TYPE_SIGNAL).member_name;
-		editor.member_selector.show(to_graph_node.object_type, to_object, [MEMBER_TYPE_METHOD], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
+		editor.member_selector.show_single_select(to_graph_node.object_type, to_object, [MEMBER_TYPE_METHOD], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
 			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
 			var callable := Callable(to_object, selected_member);
 			

@@ -162,7 +162,7 @@ func _on_connection_drag_ended() -> void:
 		_connection_dragging_wildcard_graph_node = null;
 		var cursor_distance := editor.get_local_mouse_position().distance_to(_connection_dragging_wildcard_cursor_pos);
 		if cursor_distance <= ProjectSettings.get_setting("gui/common/drag_threshold"):
-			editor.member_selector.show(
+			editor.member_selector.show_single_select(
 				graph_node.object_type,
 				graph_node.get_object(),
 				editor.member_selector.get_all_input_member_types()
@@ -216,7 +216,7 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		slot.add_theme_stylebox_override("panel", titlebar_extension_stylebox);
 		var add_button := Button.new();
 		add_button.flat = true;
-		add_button.icon = EditorInterface.get_editor_theme().get_icon("Add",&"EditorIcons");
+		add_button.icon = EditorInterface.get_editor_theme().get_icon(&"Edit",&"EditorIcons");
 		add_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER;
 		add_button.pressed.connect(_on_add_button_pressed);
 		slot.add_child(add_button);
@@ -235,5 +235,11 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		};
 	
 	func _on_add_button_pressed() -> void:
-		editor.member_selector.show(graph_node.object_type, graph_node.get_object(), editor.member_selector.get_all_member_types(), editor.current_view.transactions.add_object_view_member);
+		editor.member_selector.show_multi_select(
+			graph_node.object_type,
+			graph_node.get_object(),
+			editor.member_selector.get_all_member_types(),
+			graph_node.get_object_view().get("members"),
+			editor.current_view.transactions.override_object_view_members
+		);
 	

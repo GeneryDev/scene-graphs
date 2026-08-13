@@ -90,6 +90,26 @@ func add_object_view_member(object_type : String, obj : Object, member_type : St
 	if list.has(member_name): return false;
 	list.append(member_name);
 	return true;
+
+func override_object_view_members_by_type(object_type : String, obj : Object, member_type : String, member_names : Array) -> bool:
+	var obj_view := get_object_view(object_type, obj);
+	if !obj_view:
+		printerr("Failed to add object view member; no object view for " + object_type + " " + str(obj));
+		return false;
+	var list : Array = obj_view.members[member_type] if obj_view.members.has(member_type) else [];
+	obj_view.members[member_type] = list;
+	if list == member_names: return false;
+	list.clear();
+	for member_name : StringName in member_names:
+		list.append(member_name);
+	return true;
+
+func override_object_view_members(object_type : String, obj : Object, members_by_type : Dictionary) -> bool:
+	var any := false;
+	for member_type in members_by_type:
+		if override_object_view_members_by_type(object_type, obj, member_type, members_by_type[member_type] as Array):
+			any = true;
+	return any;
 	
 func has_object_view_member(object_type : String, obj : Object, member_type : String, member_name : StringName) -> bool:
 	var obj_view := get_object_view(object_type, obj);
@@ -433,6 +453,23 @@ class Transactions extends RefCounted:
 		undo_redo.create_action("Add object view member", UndoRedo.MERGE_ALL, editor.scene_root, false);
 		undo_redo.add_do_method(view, &"add_object_view_member", object_type, obj, member_type, member_name);
 		undo_redo.add_undo_method(view, &"remove_object_view_member", object_type, obj, member_type, member_name);
+		undo_redo.add_do_method(view, &"notify_view_updated");
+		undo_redo.add_undo_method(view, &"notify_view_updated");
+		undo_redo.commit_action(false);
+	
+	func override_object_view_members(object_type : String, obj : Object, members_by_type : Dictionary) -> void:
+		var old_members_by_type := {};
+		for member_type in members_by_type:
+			old_members_by_type[member_type] = view.get_object_view_members(object_type, obj, member_type).duplicate();
+	
+		if !view.override_object_view_members(object_type, obj, members_by_type):
+			return;
+		view.notify_view_updated();
+		
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Change object view members", UndoRedo.MERGE_ALL, editor.scene_root, false);
+		undo_redo.add_do_method(view, &"override_object_view_members", object_type, obj, members_by_type);
+		undo_redo.add_undo_method(view, &"override_object_view_members", object_type, obj, old_members_by_type);
 		undo_redo.add_do_method(view, &"notify_view_updated");
 		undo_redo.add_undo_method(view, &"notify_view_updated");
 		undo_redo.commit_action(false);
