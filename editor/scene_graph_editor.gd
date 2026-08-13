@@ -454,8 +454,8 @@ class Hooks extends RefCounted:
 		return true;
 	
 	func _grant_capability(instance : Object, script : Script, capability : String) -> void:
-		_get_granted_capabilities(instance).push_back(capability);
-		_capabilities[capability].hooks.push_back(instance);
+		_get_granted_capabilities(instance).append(capability);
+		_capabilities[capability].hooks.append(instance);
 	
 	func _get_granted_capabilities(instance : Object) -> Array[String]:
 		var granted_capabilities : Array[String] = instance.get_meta(META_NAME_GRANTED_CAPABILITIES, [] as Array[String]) as Array[String];
@@ -527,7 +527,7 @@ class InterfaceSignals extends RefCounted:
 		print(index);
 		
 	func _on_node_selected(node : Node) -> void:
-		editor.selected_nodes.push_back(node.name);
+		editor.selected_nodes.append(node.name);
 		editor.notify_selection_changed();
 	func _on_node_deselected(node : Node) -> void:
 		_deselect_node(node);

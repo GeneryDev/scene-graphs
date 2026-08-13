@@ -80,8 +80,8 @@ func _collect_members(obj : Object, script_getter : StringName, class_getter : S
 				var name : StringName = def["name"];
 				if name_list.has(name):
 					continue;
-				name_list.push_back(name);
-				list.push_back(def);
+				name_list.append(name);
+				list.append(def);
 		script = script.get_base_script();
 	
 	# Add members by class
@@ -92,8 +92,8 @@ func _collect_members(obj : Object, script_getter : StringName, class_getter : S
 				var name : StringName = def["name"];
 				if name_list.has(name):
 					continue;
-				name_list.push_back(name);
-				list.push_back(def);
+				name_list.append(name);
+				list.append(def);
 		cls_name = ClassDB.get_parent_class(cls_name);
 	
 	# Add dynamic properties for this specific node

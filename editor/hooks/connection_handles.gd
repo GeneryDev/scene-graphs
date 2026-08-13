@@ -110,7 +110,7 @@ func _refresh_connection_elements() -> void:
 				"from_graph_node": from_graph_node,
 				"to_graph_node": to_graph_node
 			};
-			_connections_with_elements.push_back(matching_cached_connection);
+			_connections_with_elements.append(matching_cached_connection);
 			graph_element.update_from_view();
 		
 		editor.move_child(matching_cached_connection.graph_element, intended_index);

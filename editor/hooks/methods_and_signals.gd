@@ -254,8 +254,8 @@ func _collect_members(obj : Object, script_getter : StringName, class_getter : S
 				var name : StringName = def["name"];
 				if name_list.has(name):
 					continue;
-				name_list.push_back(name);
-				list.push_back(def);
+				name_list.append(name);
+				list.append(def);
 		script = script.get_base_script();
 	
 	# Add members by class
@@ -266,8 +266,8 @@ func _collect_members(obj : Object, script_getter : StringName, class_getter : S
 				var name : StringName = def["name"];
 				if name_list.has(name):
 					continue;
-				name_list.push_back(name);
-				list.push_back(def);
+				name_list.append(name);
+				list.append(def);
 		cls_name = ClassDB.get_parent_class(cls_name);
 	
 	# Add dynamic signals and methods for this specific node
@@ -277,7 +277,7 @@ func _collect_members(obj : Object, script_getter : StringName, class_getter : S
 			var name : StringName = def["name"];
 			if name_list.has(name):
 				continue;
-			name_list.push_back(name);
+			name_list.append(name);
 			list.insert(insertion_index, def);
 			insertion_index += 1;
 	
@@ -680,7 +680,7 @@ class ConnectionHandleExtension extends RefCounted:
 		if (connection_flags & CONNECT_APPEND_SOURCE_OBJECT) != 0 || connection_callable.get_bound_arguments_count() > 0 || connection_callable.get_unbound_arguments_count() > 0:
 			var icon := ICON_ARGUMENTS;
 			element.draw_set_transform(center, connection_rotation);
-			element.draw_texture(icon, Vector2(-handle_size*3,0) - icon.get_size() / 2);
+			element.draw_texture(icon, Vector2(-handle_size*4.5,0) - icon.get_size() / 2);
 		
 		element.draw_arrow_handle(center, connection_rotation, handle_size * 1.25);
 			

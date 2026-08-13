@@ -46,7 +46,7 @@ static func get_connected_method_names(obj : Object) -> Array:
 		if(connection.flags & CONNECT_PERSIST) == 0: continue;
 		var method_name := connection.callable.get_method() as StringName; 
 		if !connected_methods.has(method_name):
-			connected_methods.push_back(method_name);
+			connected_methods.append(method_name);
 			
 	# TODO I'd like the returned methods to be in a consistent order, preferably in the order returned by get_method_list.
 	# However, that method appears to be super expensive, so I'd rather not use it in this function.
