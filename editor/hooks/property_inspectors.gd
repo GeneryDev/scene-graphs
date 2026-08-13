@@ -96,16 +96,14 @@ func _collect_members(obj : Object, script_getter : StringName, class_getter : S
 				list.push_back(def);
 		cls_name = ClassDB.get_parent_class(cls_name);
 	
-	# Add dynamic signals and methods for this specific node
+	# Add dynamic properties for this specific node
 	if instance_getter && obj.has_method(instance_getter):
-		var insertion_index := 0;
 		for def in obj.call(instance_getter):
 			var name : StringName = def["name"];
 			if name_list.has(name):
 				continue;
-			name_list.push_back(name);
-			list.insert(insertion_index, def);
-			insertion_index += 1;
+			name_list.append(name);
+			list.append(def);
 	
 	return list;
 
