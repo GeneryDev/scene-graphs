@@ -67,6 +67,13 @@ const default_views : Dictionary = {
 	}
 };
 
+var interface_memory : Dictionary = {
+	"view_copy_preferences": {
+		"view_rules": {
+		}
+	}
+};
+
 var global_views : Dictionary = {}
 var local_views : Dictionary = {}
 
@@ -149,9 +156,9 @@ func ensure_valid_view_active() -> void:
 	if !active_local_view_metadata || !get_view(active_local_view_metadata):
 		activate_view(get_fallback_local_view_metadata());
 
-func populate_view_dropdown(dropdown : OptionButton) -> void:
+func populate_view_dropdown(dropdown : OptionButton, clear : bool = true) -> void:
 	var theme := EditorInterface.get_editor_theme();
-	dropdown.clear();
+	if clear: dropdown.clear();
 	for view_name in global_views:
 		dropdown.add_icon_item(theme.get_icon("PreviewEnvironment", "EditorIcons"), view_name);
 		dropdown.set_item_metadata(dropdown.item_count-1, {
@@ -360,16 +367,17 @@ class EditViewsDialog extends RefCounted:
 	const RULE_TYPE_CONSTANTS : = {
 		"object_source": {
 			"label": "Node Sources",
-			"tooltip": "Controls which scene objects get added automatically to the graph"
+			"tooltip": "Controls which scene objects get added automatically to the graph",
+			"copy_by_default": false
 		},
 		"member_source": {
 			"label": "Member Sources",
-			"tooltip": "Controls which object members (methods/signals) get added automatically to nodes in the graph"
+			"tooltip": "Controls which object members (methods/signals) get added automatically to nodes in the graph",
+			"copy_by_default": true
 		}
 	};
 
 	const ACTION_NEW_VIEW : int = 0;
-	const ACTION_DUPLICATE_VIEW : int = 1;
 	const ACTION_RENAME_VIEW : int = 2;
 	const ACTION_REMOVE_VIEW : int = 3;
 	
@@ -429,8 +437,8 @@ class EditViewsDialog extends RefCounted:
 				
 		var rules_root_item := tree.create_item(root_item);
 		rules_root_item.set_text(COL_MAIN, "Rules");
-		_populate_rule_type(tree, rules_root_item, "object_source");
-		_populate_rule_type(tree, rules_root_item, "member_source");
+		for rule_type in RULE_TYPE_CONSTANTS:
+			_populate_rule_type(tree, rules_root_item, rule_type);
 	
 	func _populate_toolbar(metadata : Dictionary) -> void:
 		var view_button : MenuButton = _active["view_button"];
@@ -438,7 +446,6 @@ class EditViewsDialog extends RefCounted:
 		var theme := EditorInterface.get_editor_theme();
 		popup.clear();
 		popup.add_icon_item(theme.get_icon("New", "EditorIcons"), "New...", ACTION_NEW_VIEW);
-		popup.add_icon_item(theme.get_icon("Duplicate", "EditorIcons"), "Duplicate...", ACTION_DUPLICATE_VIEW);
 		popup.add_icon_item(theme.get_icon("Rename", "EditorIcons"), "Rename...", ACTION_RENAME_VIEW);
 		popup.set_item_disabled(popup.item_count-1, metadata.view_type == "global");
 		popup.set_item_tooltip(popup.item_count-1, "Cannot rename a global view" if (metadata.view_type == "global") else "");
@@ -698,26 +705,9 @@ class EditViewsDialog extends RefCounted:
 		var metadata := editing_view_metadata;
 		match action:
 			ACTION_NEW_VIEW:
-				var dialog := create_new_view_dialog("", true, {
-					"dialog_title": "Create New View",
-					"name_label": "Name: ",
-					"ok_button_text": "Create"
-				}, _validate_view_name, _new_view);
-				EditorInterface.popup_dialog_centered(dialog);
-			ACTION_DUPLICATE_VIEW:
-				var dialog := create_new_view_dialog(metadata.view_name, true, {
-					"dialog_title": "Duplicate View",
-					"name_label": "Name: ",
-					"ok_button_text": "Duplicate"
-				}, _validate_view_name, func (new_metadata : Dictionary) -> void: _duplicate_view(metadata, new_metadata));
-				EditorInterface.popup_dialog_centered(dialog);
+				popup_view_new_dialog("", metadata, _validate_view_name, _new_view);
 			ACTION_RENAME_VIEW:
-				var dialog := create_new_view_dialog(metadata.view_name, false, {
-					"dialog_title": "Rename View",
-					"name_label": "Name: ",
-					"ok_button_text": "Rename"
-				}, _validate_view_name, func (new_metadata : Dictionary) -> void: _rename_view(metadata, new_metadata));
-				EditorInterface.popup_dialog_centered(dialog);
+				popup_view_rename_dialog(metadata.view_name, _validate_view_name, func (new_name : String) -> void: _rename_view(metadata, new_name));
 			ACTION_REMOVE_VIEW:
 				var dialog := ConfirmationDialog.new();
 				dialog.title = "Please confirm...";
@@ -737,18 +727,23 @@ class EditViewsDialog extends RefCounted:
 			return [false, "View name already exists."];
 		return [true, "View name is valid."];
 	
-	func _new_view(new_metadata : Dictionary) -> void:
-		new_metadata = view_manager.create_view(new_metadata);
+	func _new_view(new_metadata : Dictionary, based_on_metadata : Dictionary, copy_flags_per_rule_type : Dictionary) -> void:
+		var base_view : SceneGraphView;
+		if based_on_metadata:
+			var based_on_view : SceneGraphView = view_manager.get_view(based_on_metadata);
+			base_view = SceneGraphView.new(editor);
+			
+			base_view.hook_options = based_on_view.hook_options.duplicate(true);
+			for rule_type in copy_flags_per_rule_type:
+				if !copy_flags_per_rule_type[rule_type]: continue;
+				base_view.view_rules[rule_type] = based_on_view.view_rules.get(rule_type,{}).duplicate(true)
+		new_metadata = view_manager.create_view(new_metadata, base_view);
 		repopulate_view_dropdown();
 		edit_view(new_metadata);
+		view_manager.activate_view(new_metadata);
 	
-	func _duplicate_view(existing_metadata : Dictionary, new_metadata : Dictionary) -> void:
-		new_metadata = view_manager.create_view(new_metadata, view_manager.get_view(existing_metadata));
-		repopulate_view_dropdown();
-		edit_view(new_metadata);
-	
-	func _rename_view(existing_metadata : Dictionary, new_metadata : Dictionary) -> void:
-		new_metadata = view_manager.rename_view(existing_metadata, new_metadata.view_name);
+	func _rename_view(existing_metadata : Dictionary, new_name : String) -> void:
+		var new_metadata = view_manager.rename_view(existing_metadata, new_name);
 		repopulate_view_dropdown();
 		edit_view(new_metadata);
 	
@@ -763,17 +758,20 @@ class EditViewsDialog extends RefCounted:
 		view_manager.activate_view(metadata);
 		_active["dialog"].queue_free();
 	
-	func create_new_view_dialog(preset_text : String, show_global_toggle : bool, texts : Dictionary, validation_callback : Callable, finished_callback : Callable) -> ConfirmationDialog:
+	func popup_view_new_dialog(preset_text : String, preset_based_on_metadata : Dictionary, validation_callback : Callable, finished_callback : Callable) -> void:
 		var dialog := ConfirmationDialog.new();
-		dialog.title = texts.dialog_title;
-		dialog.size = Vector2(420, 130);
-		dialog.ok_button_text = texts.ok_button_text;
+		var theme := EditorInterface.get_editor_theme();
+		dialog.title = "Create New View";
+		dialog.size = Vector2(420, 320);
+		dialog.ok_button_text = "Create";
 		var content := VBoxContainer.new();
 		dialog.add_child(content);
+		
+		# Name Row (+ global toggle)
 		var name_row := HBoxContainer.new();
 		content.add_child(name_row);
 		var name_label := Label.new();
-		name_label.text = texts.name_label;
+		name_label.text = "Name: ";
 		name_row.add_child(name_label);
 		var name_field := LineEdit.new();
 		name_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
@@ -787,11 +785,144 @@ class EditViewsDialog extends RefCounted:
 				dialog.get_ok_button().pressed.emit();
 		);
 		name_row.add_child(name_field);
-		var global_toggle : CheckButton;
-		if show_global_toggle:
-			global_toggle = CheckButton.new();
-			global_toggle.text = "Global";
-			name_row.add_child(global_toggle);
+		var global_toggle := CheckButton.new();
+		global_toggle.text = "Global";
+		name_row.add_child(global_toggle);
+		
+		# Based-on Row
+		var based_on_row := HBoxContainer.new();
+		content.add_child(based_on_row);
+		var based_on_label := Label.new();
+		based_on_label.text = "Based on: ";
+		based_on_row.add_child(based_on_label);
+		var based_on_dropdown := OptionButton.new();
+		based_on_row.add_child(based_on_dropdown);
+		based_on_dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+		based_on_dropdown.add_item("(Empty)");
+		based_on_dropdown.set_item_metadata(based_on_dropdown.item_count-1, {});
+		view_manager.populate_view_dropdown(based_on_dropdown, false);
+		view_manager.set_view_dropdown(based_on_dropdown, preset_based_on_metadata);
+		
+		# Copy Options
+		var copy_options_tree := Tree.new();
+		copy_options_tree.add_theme_stylebox_override("panel", StyleBoxEmpty.new());
+		copy_options_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL;
+		content.add_child(copy_options_tree);
+		
+		var copy_flags_per_rule_type := {};
+		
+		var update_tree := func() -> void:
+			copy_options_tree.clear();
+			var tree_root := copy_options_tree.create_item();
+			copy_options_tree.hide_root = true;
+			var rules_root := copy_options_tree.create_item(tree_root);
+			rules_root.set_text(0, "Copy Rules");
+			
+			var based_on_metadata : Dictionary = based_on_dropdown.get_selected_metadata() as Dictionary;
+			
+			for rule_type in RULE_TYPE_CONSTANTS:
+				var rule_type_info : Dictionary = RULE_TYPE_CONSTANTS[rule_type];
+				var view : SceneGraphView = view_manager.get_view(based_on_metadata) if based_on_metadata else null;
+				
+				var rule_type_item := copy_options_tree.create_item(rules_root);
+				copy_flags_per_rule_type[rule_type] = view_manager.interface_memory.view_copy_preferences.view_rules.get_or_add(rule_type, rule_type_info.copy_by_default);
+				var checked : bool = copy_flags_per_rule_type[rule_type];
+				var rule_count : int = view.view_rules.get(rule_type).size() if view != null && view.view_rules.has(rule_type) else 0;
+				rule_type_item.set_cell_mode(0, TreeItem.CELL_MODE_CHECK);
+				rule_type_item.set_editable(0, rule_count > 0);
+				rule_type_item.set_text(0, "%s (%s)" % [rule_type_info.label, rule_count]);
+				rule_type_item.set_checked(0, checked && rule_count > 0);
+				rule_type_item.set_metadata(0, {
+					"rule_type": rule_type
+				});
+				if view:
+					var rules : Array = view.view_rules.get(rule_type);
+					if rules:
+						for rule_obj in rules:
+							var rule_item := copy_options_tree.create_item(rule_type_item);
+							var hook : Object = view.get_view_rule_hook(rule_obj.id, rule_type);
+							if hook:
+								rule_item.set_text(0, hook.get_view_rule_label(view.rule_params_from_dict(hook, rule_obj.get("params") as Dictionary)));
+							else:
+								rule_item.set_text(0, rule_obj.id);
+							rule_item.set_icon(0, theme.get_icon(&"GuiScrollGrabber", &"EditorIcons"));
+					else:
+						var no_rule_item := copy_options_tree.create_item(rule_type_item);
+						no_rule_item.set_text(0, "(none)");
+		
+		update_tree.call();
+		copy_options_tree.item_edited.connect(func() -> void:
+			var edited_item := copy_options_tree.get_edited();
+			var metadata : Dictionary = edited_item.get_metadata(0);
+			if metadata.has("rule_type"):
+				var rule_type : String = metadata.rule_type;
+				var checked := edited_item.is_checked(0);
+				copy_flags_per_rule_type[rule_type] = checked;
+				view_manager.interface_memory.view_copy_preferences.view_rules[rule_type] = checked;
+		);
+		based_on_dropdown.item_selected.connect(func(_index : int) -> void:
+			update_tree.call();
+		);
+			
+		# Status
+		var status_container := PanelContainer.new();
+		status_container.custom_minimum_size = Vector2(10, 33);
+		status_container.add_theme_stylebox_override("panel", status_container.get_theme_stylebox("panel", "EditorValidationPanel"));
+		content.add_child(status_container);
+		var status_label := Label.new();
+		status_label.text = " •  Name can't be empty";
+		status_container.add_child(status_label);
+		
+		var validate : Callable = func() -> void:
+			var result : Array = validation_callback.call(name_field.text);
+			var valid : bool = result[0];
+			var status_msg : String = result[1];
+			dialog.get_ok_button().disabled = !valid;
+			status_label.text = " •  " + status_msg;
+			status_label.add_theme_color_override(&"font_color", EditorInterface.get_editor_theme().get_color(&"success_color" if valid else &"error_color", &"Editor"));
+		
+		name_field.text_changed.connect(validate.unbind(1));
+		validate.call();
+		
+		dialog.confirmed.connect(func () -> void:
+			var new_metadata := {
+				"view_name": name_field.text,
+				"view_type": "global" if global_toggle.button_pressed else "local"
+			};
+			var based_on_metadata : Dictionary = based_on_dropdown.get_selected_metadata() as Dictionary;
+			finished_callback.call(new_metadata, based_on_metadata, copy_flags_per_rule_type);
+		);
+		dialog.confirmed.connect(dialog.queue_free, CONNECT_DEFERRED);
+		dialog.canceled.connect(dialog.queue_free, CONNECT_DEFERRED);
+		dialog.close_requested.connect(dialog.queue_free, CONNECT_DEFERRED);
+		
+		EditorInterface.popup_dialog_centered(dialog);
+	
+	
+	func popup_view_rename_dialog(preset_text : String, validation_callback : Callable, finished_callback : Callable) -> void:
+		var dialog := ConfirmationDialog.new();
+		dialog.title = "Rename View";
+		dialog.size = Vector2(420, 130);
+		dialog.ok_button_text = "Rename";
+		var content := VBoxContainer.new();
+		dialog.add_child(content);
+		var name_row := HBoxContainer.new();
+		content.add_child(name_row);
+		var name_label := Label.new();
+		name_label.text = "Name: ";
+		name_row.add_child(name_label);
+		var name_field := LineEdit.new();
+		name_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+		if preset_text:
+			name_field.text = preset_text;
+		dialog.ready.connect(name_field.grab_focus, CONNECT_DEFERRED | CONNECT_ONE_SHOT);
+		dialog.ready.connect(name_field.select_all, CONNECT_DEFERRED | CONNECT_ONE_SHOT);
+		name_field.keep_editing_on_text_submit = true;
+		name_field.text_submitted.connect(func (_text : String) -> void:
+			if !dialog.get_ok_button().disabled:
+				dialog.get_ok_button().pressed.emit();
+		);
+		name_row.add_child(name_field);
 		
 		var status_container := PanelContainer.new();
 		status_container.custom_minimum_size = Vector2(10, 33);
@@ -813,15 +944,11 @@ class EditViewsDialog extends RefCounted:
 		validate.call();
 		
 		dialog.confirmed.connect(func () -> void:
-			var info := {
-				"view_name": name_field.text,
-				"view_type": ("global" if global_toggle.button_pressed else "local") if global_toggle else ""
-			};
-			finished_callback.call(info);
+			finished_callback.call(name_field.text);
 		);
 		dialog.confirmed.connect(dialog.queue_free, CONNECT_DEFERRED);
 		dialog.canceled.connect(dialog.queue_free, CONNECT_DEFERRED);
 		dialog.close_requested.connect(dialog.queue_free, CONNECT_DEFERRED);
 		
-		return dialog;
+		EditorInterface.popup_dialog_centered(dialog);
 	
