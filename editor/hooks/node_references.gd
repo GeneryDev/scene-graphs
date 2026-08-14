@@ -28,6 +28,8 @@ func configure_port_types() -> void:
 	editor.register_port_type(&"node_reference_out");
 	editor.register_port_type(&"node_reference");
 	editor.add_valid_connection_type(editor.port_type(&"node_reference_out"), editor.port_type(&"node_reference"));
+	editor.add_valid_connection_type(editor.port_type(&"wildcard_out"), editor.port_type(&"node_reference"));
+	editor.add_valid_connection_type(editor.port_type(&"node_reference_out"), editor.port_type(&"wildcard_in"));
 
 ### CAPABILITY: configure_hook_options
 func get_hook_options_id() -> String:
@@ -105,27 +107,58 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	if !is_instance_of(from_graph_node, SceneObjectGraphNode): return;
 	if !is_instance_of(to_graph_node, SceneObjectGraphNode): return;
 	
-	if (from_graph_node as GraphNode).get_output_port_type(from_port) != editor.port_type(&"node_reference_out"): return;
-	if (to_graph_node as GraphNode).get_input_port_type(to_port) != editor.port_type(&"node_reference"): return;
+	var from_port_type := (from_graph_node as GraphNode).get_output_port_type(from_port);
+	var to_port_type := (to_graph_node as GraphNode).get_input_port_type(to_port);
+	var port_pair := [from_port_type, to_port_type];
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
+	if from_object is not Node or to_object is not Node:
+		EditorInterface.get_editor_toaster().push_toast("Node reference connections can only be made between Nodes", EditorToaster.SEVERITY_ERROR);
+		return;
 	
-	var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
-	var property_info := Utility.get_property_info_by_name(to_object, property_name);
-	var new_value : Variant = null;
-	if property_info.type == TYPE_NODE_PATH:
-		new_value = to_object.get_path_to(from_object);
-	else:
-		new_value = from_object;
+	if port_pair == [editor.port_type(&"node_reference_out"), editor.port_type(&"node_reference")] || port_pair == [editor.port_type(&"wildcard_out"), editor.port_type(&"node_reference")]:
+		editor.current_view.transactions.add_object_view_member(from_graph_node.object_type, from_object, MEMBER_TYPE_NODE_REFERENCE_OUT, &"");
+		var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
+		var property_info := Utility.get_property_info_by_name(to_object, property_name);
+		if !Utility.is_property_node_reference(property_info):
+			EditorInterface.get_editor_toaster().push_toast("Node reference connections can only be made to NodePath or Node-derived properties", EditorToaster.SEVERITY_ERROR);
+			return;
+		var new_value : Variant = null;
+		if property_info.type == TYPE_NODE_PATH:
+			new_value = to_object.get_path_to(from_object);
+		else:
+			new_value = from_object;
+		
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Connect node reference", UndoRedo.MERGE_ALL, editor.scene_root, false);
+		undo_redo.add_do_property(to_object, property_name, new_value);
+		undo_redo.add_undo_property(to_object, property_name, to_object.get(property_name));
+		undo_redo.add_do_method(self, &"notify_scene_connections_updated");
+		undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
+		undo_redo.commit_action();
+	elif port_pair == [editor.port_type(&"node_reference_out"), editor.port_type(&"wildcard_in")]:
+		editor.member_selector.show_single_select(to_graph_node.object_type, to_object, [MEMBER_TYPE_PROPERTY], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
+			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
+			var property_name : StringName = selected_member;
+			var property_info := Utility.get_property_info_by_name(to_object, property_name);
+			if !Utility.is_property_node_reference(property_info):
+				EditorInterface.get_editor_toaster().push_toast("Node reference connections can only be made to NodePath or Node-derived properties", EditorToaster.SEVERITY_ERROR);
+				return;
+			var new_value : Variant = null;
+			if property_info.type == TYPE_NODE_PATH:
+				new_value = to_object.get_path_to(from_object);
+			else:
+				new_value = from_object;
 	
-	var undo_redo := EditorInterface.get_editor_undo_redo();
-	undo_redo.create_action("Connect node reference", UndoRedo.MERGE_ALL, editor.scene_root, false);
-	undo_redo.add_do_property(to_object, property_name, new_value);
-	undo_redo.add_undo_property(to_object, property_name, to_object.get(property_name));
-	undo_redo.add_do_method(self, &"notify_scene_connections_updated");
-	undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
-	undo_redo.commit_action();
+			var undo_redo := EditorInterface.get_editor_undo_redo();
+			undo_redo.create_action("Connect node reference", UndoRedo.MERGE_ALL, editor.scene_root, false);
+			undo_redo.add_do_property(to_object, property_name, new_value);
+			undo_redo.add_undo_property(to_object, property_name, to_object.get(property_name));
+			undo_redo.add_do_method(self, &"notify_scene_connections_updated");
+			undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
+			undo_redo.commit_action();
+		);
 
 func _on_disconnection_request(from_node_name : StringName, from_port : int, to_node_name : StringName, to_port : int) -> void:
 	var from_graph_node := editor.get_node(NodePath(from_node_name));
