@@ -1,5 +1,7 @@
 ﻿extends GraphNode
 
+const PORT_COLOR_WILDCARD := Color(0xe0e0e0ff);
+
 var object_type : String;
 var obj : Object;
 
@@ -9,6 +11,12 @@ var user_size : Vector2;
 
 var _last_built_view : Dictionary = {};
 var _building_from_view := false;
+var _custom_titlebar : Control;
+
+var _custom_titlebar_stylebox : StyleBox;
+var _custom_titlebar_selected_stylebox : StyleBox;
+var _custom_titlebar_wildcard_port_icon : Texture2D;
+var _custom_titlebar_wildcard_ports : Array[TextureRect];
 
 func _init(object_type : String, obj : Object, editor : SceneGraphEditor):
 	self.editor = editor;
@@ -16,6 +24,10 @@ func _init(object_type : String, obj : Object, editor : SceneGraphEditor):
 	self.obj = obj;
 	resizable = true;
 	custom_minimum_size = Vector2(120, 0);
+	theme = load("res://addons/scene-graphs/themes/scene_object_graph_node_theme.tres");
+	get_titlebar_hbox().visible = false;
+	get_titlebar_hbox().get_child(0).visible = false;
+	get_titlebar_hbox().custom_minimum_size = Vector2.ZERO;
 	
 	title = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 	
@@ -24,17 +36,20 @@ func _init(object_type : String, obj : Object, editor : SceneGraphEditor):
 		var icon_rect := TextureRect.new();
 		icon_rect.texture = icon;
 		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED;
-		get_titlebar_hbox().add_child(icon_rect, INTERNAL_MODE_FRONT);
-		get_titlebar_hbox().move_child(icon_rect, 0);
-		get_titlebar_hbox().add_theme_constant_override("separation", 8);
+#		get_titlebar_hbox().add_child(icon_rect, INTERNAL_MODE_FRONT);
+#		get_titlebar_hbox().move_child(icon_rect, 0);
+#		get_titlebar_hbox().add_theme_constant_override("separation", 8);
 	
-	_member_cache.clear();
+	_build_custom_titlebar();
 	
 	for hook in editor.hooks.initialize_object_graph_node:
 		hook.initialize_object_graph_node(self);
 	
+	node_selected.connect(_update_titlebar);
+	node_deselected.connect(_update_titlebar);
 	position_offset_changed.connect(_on_position_offset_changed);
 	resize_end.connect(_on_resize_end);
+	tree_entered.connect(_on_theme_changed);
 
 func get_object() -> Object:
 	return obj;
@@ -72,16 +87,6 @@ func update_view() -> void:
 	
 	obj_view["position_offset"] = position_offset;
 	obj_view["user_size"] = user_size;
-	
-func rebuild_contents_from_view() -> void:
-	clear_all_slots();
-	_member_cache.clear();
-	for child in get_children():
-		remove_child(child)
-		child.queue_free();
-	
-	create_and_add_contents();
-	reset_to_user_size();
 
 func reset_to_user_size() -> void:
 	reset_size();
@@ -89,6 +94,17 @@ func reset_to_user_size() -> void:
 	var snapping_distance := editor.snapping_distance;
 	size = Vector2(ceil(size.x / snapping_distance)*snapping_distance,ceil(size.y / snapping_distance)*snapping_distance);
 	self.size = size.max(user_size);
+	
+func rebuild_contents_from_view() -> void:
+	clear_all_slots();
+	_member_cache.clear();
+	for child in get_children():
+		if child == _custom_titlebar: continue;
+		remove_child(child);
+		child.queue_free();
+	
+	create_and_add_contents();
+	reset_to_user_size();
 
 func claim_object_graph_node_member_slot(hook : Object, member_type : String, member_name : StringName) -> bool:
 	var highest_bid : float = 0;
@@ -101,8 +117,86 @@ func claim_object_graph_node_member_slot(hook : Object, member_type : String, me
 			matching_bid = bid;
 	return matching_bid == highest_bid;
 
+func _build_custom_titlebar() -> void:
+	var obj : Object = get_object();
+	
+	var slot := MarginContainer.new();
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE;
+	var panel := PanelContainer.new();
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE;
+	slot.add_child(panel);
+	var hbox := HBoxContainer.new();
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE;
+	panel.add_child(hbox);
+	var icon := SceneGraphEditor.Utility.get_object_icon(obj);
+	if icon:
+		var icon_rect := TextureRect.new();
+		icon_rect.texture = icon;
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED;
+		hbox.add_child(icon_rect);
+		hbox.add_theme_constant_override("separation", 8);
+	var label := Label.new();
+	label.text = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
+	label.theme_type_variation = &"GraphNodeTitleLabel";
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
+	hbox.add_child(label);
+	
+	var edit_button := Button.new();
+	edit_button.theme_type_variation = &"FlatMenuButton";
+	edit_button.icon = EditorInterface.get_editor_theme().get_icon(&"Edit",&"EditorIcons");
+	edit_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER;
+	edit_button.pressed.connect(_on_edit_button_pressed);
+	edit_button.tooltip_text = "Edit Object View";
+	hbox.add_child(edit_button);
+	
+	var overlays := Control.new();
+	overlays.mouse_filter = MOUSE_FILTER_IGNORE;
+	slot.add_child(overlays);
+	var wildcard_port_left := _create_wildcard_port_control();
+	wildcard_port_left.anchor_left = 0;
+	wildcard_port_left.anchor_right = 0;
+	wildcard_port_left.offset_left = -1;
+	wildcard_port_left.offset_right = -1;
+	var wildcard_port_right := _create_wildcard_port_control();
+	wildcard_port_right.anchor_left = 1;
+	wildcard_port_right.anchor_right = 1;
+	wildcard_port_right.offset_left = 1;
+	wildcard_port_right.offset_right = 1;
+	overlays.add_child(wildcard_port_left);
+	overlays.add_child(wildcard_port_right);
+	
+	_custom_titlebar = slot;
+	
+	add_child(_custom_titlebar);
+
+func _create_wildcard_port_control() -> TextureRect:
+	var control := TextureRect.new();
+	control.self_modulate = PORT_COLOR_WILDCARD;
+	control.mouse_filter = MOUSE_FILTER_IGNORE;
+	control.anchor_top = 0.5;
+	control.anchor_bottom = 0.5;
+	control.grow_horizontal = GROW_DIRECTION_BOTH;
+	control.grow_vertical = GROW_DIRECTION_BOTH;
+	_custom_titlebar_wildcard_ports.append(control);
+	return control;
+
+func _set_custom_titlebar_slot() -> void:
+	set_slot(0,
+		true,
+		editor.port_type(&"wildcard_in"),
+		PORT_COLOR_WILDCARD,
+		true,
+		editor.port_type(&"wildcard_out"),
+		PORT_COLOR_WILDCARD,
+		get_theme_icon("empty"),
+		get_theme_icon("empty"),
+		false
+		);
+
 func create_and_add_contents() -> void:
-	var slots_to_add : Array[Dictionary]= [];
+	if _custom_titlebar != null: _set_custom_titlebar_slot()
+
+	var slots_to_add : Array[Dictionary] = [];
 	for hook in editor.hooks.create_object_graph_node_slots:
 		var slots_from_hook : Array[Dictionary] = hook.create_object_graph_node_slots(self);
 		for slot in slots_from_hook:
@@ -123,6 +217,9 @@ func create_and_add_contents() -> void:
 	
 	var left_port_index := 0;
 	var right_port_index := 0;
+	if _custom_titlebar != null:
+		left_port_index += 1;
+		right_port_index += 1;
 	
 	for slot in slots_to_add:
 		var slot_index := get_child_count();
@@ -146,6 +243,15 @@ func create_and_add_contents() -> void:
 			if right_port.has("member"):
 				_add_member_to_cache(right_port.member.member_type, right_port.member.member_name, slot_index, right_port_index);
 			right_port_index += 1;
+
+func _on_edit_button_pressed() -> void:
+	editor.member_selector.show_multi_select(
+		object_type,
+		get_object(),
+		editor.member_selector.get_all_member_types(),
+		get_object_view().get("members"),
+		editor.current_view.transactions.override_object_view_members
+	);
 
 func _add_member_to_cache(member_type : String, member_name : StringName, slot_id : int, port_id : int) -> void:
 	_member_cache.get_or_add(member_type, {})[member_name] = {
@@ -188,6 +294,19 @@ func get_member_from_slot_id(slot_id : int, member_type : String) -> Dictionary:
 		if member["slot_id"] == slot_id:
 			return member;
 	return {};
+
+func _update_titlebar() -> void:
+	(_custom_titlebar.get_child(0) as PanelContainer).add_theme_stylebox_override("panel", _custom_titlebar_selected_stylebox if selected else _custom_titlebar_stylebox);
+	for port_texture_rect in _custom_titlebar_wildcard_ports:
+		port_texture_rect.texture = _custom_titlebar_wildcard_port_icon;
+
+func _on_theme_changed() -> void:
+	_custom_titlebar_stylebox = get_theme_stylebox("titlebar_custom");
+	_custom_titlebar_selected_stylebox = get_theme_stylebox("titlebar_custom_selected");
+	_custom_titlebar_wildcard_port_icon = get_theme_icon("wildcard_port");
+	if _custom_titlebar_wildcard_port_icon is DPITexture:
+		_custom_titlebar_wildcard_port_icon.set_size_override(Vector2i.ONE * get_theme_constant("wildcard_port_size"));
+	_update_titlebar();
 
 func _on_position_offset_changed() -> void:
 	update_view();

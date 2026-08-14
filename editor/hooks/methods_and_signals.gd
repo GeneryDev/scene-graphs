@@ -668,6 +668,7 @@ class ConnectionHandleExtension extends RefCounted:
 		element.repositioned.connect(update_connection_info);
 	
 	func draw_connection_handle(center : Vector2, connection_rotation : float, handle_size : float) -> bool:
+		handle_size *= 1.25;
 		var theme := EditorInterface.get_editor_theme();
 		if (connection_flags & CONNECT_ONE_SHOT) != 0:
 			var icon := theme.get_icon("ZoomReset", "EditorIcons") as Texture2D;
@@ -680,9 +681,9 @@ class ConnectionHandleExtension extends RefCounted:
 		if (connection_flags & CONNECT_APPEND_SOURCE_OBJECT) != 0 || connection_callable.get_bound_arguments_count() > 0 || connection_callable.get_unbound_arguments_count() > 0:
 			var icon := ICON_ARGUMENTS;
 			element.draw_set_transform(center, connection_rotation);
-			element.draw_texture(icon, Vector2(-handle_size*4.5,0) - icon.get_size() / 2);
+			element.draw_texture(icon, Vector2(-handle_size*3,0) - icon.get_size() / 2);
 		
-		element.draw_arrow_handle(center, connection_rotation, handle_size * 1.25);
+		element.draw_arrow_handle(center, connection_rotation, handle_size);
 			
 		return true;
 	

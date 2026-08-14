@@ -4,7 +4,6 @@ extends RefCounted
 static var SceneObjectGraphNode : Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd");
 
 const OBJECT_TYPE_NODE := "node";
-const PORT_COLOR_WILDCARD := Color(0xe0e0e0ff);
 
 const META_NAME_EXTENSION := &"_scene_objects_extension";
 
@@ -18,7 +17,7 @@ func _init(editor : SceneGraphEditor):
 	editor.delete_nodes_request.connect(_on_delete_nodes_request);
 	
 func get_scene_graph_capabilities() -> Array[String]:
-	return ["configure_capabilities","configure_port_types","populate_graph_nodes_from_view","drag_and_drop","handle_view_object_types","initialize_object_graph_node","create_object_graph_node_slots"];
+	return ["configure_capabilities","configure_port_types","populate_graph_nodes_from_view","drag_and_drop","handle_view_object_types"];
 
 ### CAPABILITY: configure_capabilities
 func configure_capabilities() -> void:
@@ -171,75 +170,3 @@ func _on_connection_drag_ended() -> void:
 				editor.current_view.transactions.add_object_view_member
 			);
 		
-# CAPABILITY: initialize_object_graph_node
-func initialize_object_graph_node(graph_node : GraphNode) -> void:
-	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self));
-
-# CAPABILITY: create_object_graph_node_slots
-func create_object_graph_node_slots(graph_node : GraphNode) -> Array[Dictionary]:
-	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots();
-
-class SceneObjectGraphNodeExtension extends RefCounted:
-	var graph_node : GraphNode;
-	var editor : SceneGraphEditor;
-	var hook : Object;
-	
-	var titlebar_extension_stylebox : StyleBoxFlat;
-	
-	func _init(graph_node : GraphNode, editor : SceneGraphEditor, hook : Object) -> void:
-		self.graph_node = graph_node;
-		self.editor = editor;
-		self.hook = hook;
-		
-		graph_node.tree_entered.connect(_on_theme_changed);
-	
-	func _on_theme_changed() -> void:
-		titlebar_extension_stylebox = StyleBoxFlat.new();
-		titlebar_extension_stylebox.bg_color = (graph_node.get_theme_stylebox("titlebar") as StyleBoxFlat).get("bg_color") * Color(1,1,1,0.5);
-		titlebar_extension_stylebox.expand_margin_top = 0;
-		titlebar_extension_stylebox.expand_margin_left = 0;
-		titlebar_extension_stylebox.expand_margin_right = 0;
-		titlebar_extension_stylebox.corner_radius_bottom_left = 4;
-		titlebar_extension_stylebox.corner_radius_bottom_right = 4;
-		titlebar_extension_stylebox.corner_radius_top_left = 4;
-		titlebar_extension_stylebox.corner_radius_top_right = 4;
-
-	func create_object_graph_node_slots() -> Array[Dictionary]:
-		var created : Array[Dictionary] = [];
-		
-		created.append(create_wildcard_slot());
-		
-		return created;
-	
-	func create_wildcard_slot() -> Dictionary:
-		var slot := PanelContainer.new();
-		slot.add_theme_stylebox_override("panel", titlebar_extension_stylebox);
-		var add_button := Button.new();
-		add_button.flat = true;
-		add_button.icon = EditorInterface.get_editor_theme().get_icon(&"Edit",&"EditorIcons");
-		add_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER;
-		add_button.pressed.connect(_on_add_button_pressed);
-		slot.add_child(add_button);
-		
-		return {
-			"control": slot,
-			"sort_key": INT32_MIN,
-			"left_port": {
-				"port_type": editor.port_type(&"wildcard_in"),
-				"port_color": PORT_COLOR_WILDCARD
-			},
-			"right_port": {
-				"port_type": editor.port_type(&"wildcard_out"),
-				"port_color": PORT_COLOR_WILDCARD
-			}
-		};
-	
-	func _on_add_button_pressed() -> void:
-		editor.member_selector.show_multi_select(
-			graph_node.object_type,
-			graph_node.get_object(),
-			editor.member_selector.get_all_member_types(),
-			graph_node.get_object_view().get("members"),
-			editor.current_view.transactions.override_object_view_members
-		);
-	
