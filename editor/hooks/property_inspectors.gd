@@ -166,7 +166,11 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			
 			created.append({
 				"control": row_control,
-				"sort_key": 0
+				"sort_key": 0,
+				"member": {
+					"member_type": MEMBER_TYPE_PROPERTY,
+					"member_name": property_name
+				}
 			});
 		return created;
 	

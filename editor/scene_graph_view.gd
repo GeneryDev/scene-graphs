@@ -457,6 +457,19 @@ class Transactions extends RefCounted:
 		undo_redo.add_undo_method(view, &"notify_view_updated");
 		undo_redo.commit_action(false);
 	
+	func remove_object_view_member(object_type : String, obj : Object, member_type : String, member_name : StringName) -> void:
+		if !view.remove_object_view_member(object_type, obj, member_type, member_name):
+			return;
+		view.notify_view_updated();
+		
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Remove object view member", UndoRedo.MERGE_ALL, editor.scene_root, false);
+		undo_redo.add_do_method(view, &"remove_object_view_member", object_type, obj, member_type, member_name);
+		undo_redo.add_undo_method(view, &"add_object_view_member", object_type, obj, member_type, member_name);
+		undo_redo.add_do_method(view, &"notify_view_updated");
+		undo_redo.add_undo_method(view, &"notify_view_updated");
+		undo_redo.commit_action(false);
+	
 	func override_object_view_members(object_type : String, obj : Object, members_by_type : Dictionary) -> void:
 		var old_members_by_type := {};
 		for member_type in members_by_type:

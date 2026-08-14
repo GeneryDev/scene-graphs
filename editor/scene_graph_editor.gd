@@ -320,6 +320,12 @@ class Hooks extends RefCounted:
 			],
 			"hooks": [] as Array[Object]
 		},
+		"populate_popup_menu": {
+			"required_methods": [
+				&"populate_popup_menu"
+			],
+			"hooks": [] as Array[Object]
+		},
 		
 		"view_rule.object_source": {
 			"required_methods": [
@@ -495,6 +501,17 @@ class Utility extends RefCounted:
 				return null;
 		return null;
 
+func get_graph_element_at_position(at_position : Vector2) -> GraphElement:
+	var children := get_children();
+	for i in range(children.size()-1, -1, -1):
+		var child := children[i];
+		if child is not GraphElement: continue;
+		var element : GraphElement = child;
+		if !element.is_visible_in_tree(): continue;
+		var graph_node_rect := Rect2(element.position, element.size * zoom);
+		if graph_node_rect.has_point(at_position): return element;
+	return null;
+
 ### INTERFACE SIGNALS
 
 class InterfaceSignals extends RefCounted:
@@ -514,17 +531,32 @@ class InterfaceSignals extends RefCounted:
 		editor.scroll_offset_changed.connect(_on_scroll_offset_changed);
 	
 	func _on_popup_request(at_position : Vector2) -> void:
+		var elem_at_position := editor.get_graph_element_at_position(at_position);
+		if elem_at_position:
+			if !elem_at_position.selected:
+				editor.set_selected(elem_at_position);
+		
 		var menu := PopupMenu.new();
-		menu.add_item("Menu WIP");
+		var actions : Dictionary[int, Callable] = {};
+		
+		for hook in editor.hooks.populate_popup_menu:
+			hook.populate_popup_menu(at_position, menu, actions);
+			
+		if menu.item_count == 0:
+			menu.queue_free();
+			return;
+		
 		editor.add_child(menu);
 		menu.position = editor.get_screen_position() + at_position;
 		
 		menu.show();
+		menu.reset_size();
 		menu.close_requested.connect(menu.queue_free);
-		menu.index_pressed.connect(_on_popup_item_pressed);
+		menu.id_pressed.connect(_on_popup_item_pressed.bind(actions));
 	
-	func _on_popup_item_pressed(index : int) -> void:
-		print(index);
+	func _on_popup_item_pressed(id : int, actions : Dictionary[int, Callable]) -> void:
+		if actions.has(id):
+			actions[id].call();
 		
 	func _on_node_selected(node : Node) -> void:
 		editor.selected_nodes.append(node.name);

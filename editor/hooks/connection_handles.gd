@@ -18,7 +18,7 @@ func _init(editor : SceneGraphEditor):
 	editor.visibility_changed.connect(_on_visibility_changed);
 	
 func get_scene_graph_capabilities() -> Array[String]:
-	return ["configure_capabilities","configure_hook_options","override_connection_lines","view_serialization"];
+	return ["configure_capabilities","configure_hook_options","override_connection_lines","view_serialization","populate_popup_menu"];
 	
 ### CAPABILITY: configure_capabilities
 func configure_capabilities() -> void:
@@ -38,7 +38,6 @@ func create_hook_options() -> Options:
 
 func get_hook_description() -> String:
 	return "Shows movable handles for all graph connections, allowing you to redirect each individual connection to avoid tangling.\nNote: It's recommended to have this enabled when using Method and Signal connections; handles display connection flags and let you edit them when selected.";
-	
 	
 ### CONNECTIONS
 
@@ -314,6 +313,28 @@ func edit_deserialized_view(view : SceneGraphView) -> void:
 							continue;
 				# invalid
 				handles.remove_at(handle_index);
+
+### CAPABILITY: populate_popup_menu
+const ACTION_RESET_HANDLE_POSITION : int = 100;
+
+func populate_popup_menu(at_position : Vector2, menu : PopupMenu, actions : Dictionary[int, Callable]) -> void:
+	var any := false;
+	for name in editor.selected_nodes:
+		var node := editor.get_node_or_null(NodePath(name));
+		if is_instance_of(node, ConnectionHandleElement):
+			any = true;
+			break;
+	if !any: return;
+	menu.add_separator("Connection Handle");
+	menu.add_item("Reset Handle Position", ACTION_RESET_HANDLE_POSITION);
+	actions[ACTION_RESET_HANDLE_POSITION] = _action_reset_handle_position;
+
+func _action_reset_handle_position() -> void:
+	for name in editor.selected_nodes:
+		var node := editor.get_node_or_null(NodePath(name));
+		if is_instance_of(node, ConnectionHandleElement):
+			var handle : GraphElement = node;
+			handle.reset_mid_point_offset();
 
 class Options extends RefCounted:
 	@export var handles_enabled : bool = true;

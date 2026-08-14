@@ -54,11 +54,17 @@ func _init(object_type : String, obj : Object, editor : SceneGraphEditor):
 func get_object() -> Object:
 	return obj;
 	
+func get_object_type() -> String:
+	return object_type;
+	
 func get_object_key() -> Variant:
 	return editor.current_view.view_object_to_object_key(object_type, get_object());
 
 func get_object_view() -> Dictionary:
 	return editor.current_view.get_object_view(object_type, get_object());
+	
+func get_object_name() -> String:
+	return obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
 
 func update_from_view() -> void:
 	_building_from_view = true;
@@ -116,7 +122,7 @@ func claim_object_graph_node_member_slot(hook : Object, member_type : String, me
 		if other_hook == hook:
 			matching_bid = bid;
 	return matching_bid == highest_bid;
-
+	
 func _build_custom_titlebar() -> void:
 	var obj : Object = get_object();
 	
@@ -136,7 +142,7 @@ func _build_custom_titlebar() -> void:
 		hbox.add_child(icon_rect);
 		hbox.add_theme_constant_override("separation", 8);
 	var label := Label.new();
-	label.text = obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj));
+	label.text = get_object_name();
 	label.theme_type_variation = &"GraphNodeTitleLabel";
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
 	hbox.add_child(label);
@@ -145,8 +151,8 @@ func _build_custom_titlebar() -> void:
 	edit_button.theme_type_variation = &"FlatMenuButton";
 	edit_button.icon = EditorInterface.get_editor_theme().get_icon(&"Edit",&"EditorIcons");
 	edit_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER;
-	edit_button.pressed.connect(_on_edit_button_pressed);
-	edit_button.tooltip_text = "Edit Object View";
+	edit_button.pressed.connect(manage_members);
+	edit_button.tooltip_text = "Manage Members";
 	hbox.add_child(edit_button);
 	
 	var overlays := Control.new();
@@ -235,6 +241,8 @@ func create_and_add_contents() -> void:
 			right_port.get("port_type",-1),
 			right_port.get("port_color",Color.WHITE)
 			);
+		if slot.has("member"):
+			_add_member_to_cache(slot.member.member_type, slot.member.member_name, slot_index, -1);
 		if left_port:
 			if left_port.has("member"):
 				_add_member_to_cache(left_port.member.member_type, left_port.member.member_name, slot_index, left_port_index);
@@ -244,7 +252,7 @@ func create_and_add_contents() -> void:
 				_add_member_to_cache(right_port.member.member_type, right_port.member.member_name, slot_index, right_port_index);
 			right_port_index += 1;
 
-func _on_edit_button_pressed() -> void:
+func manage_members() -> void:
 	editor.member_selector.show_multi_select(
 		object_type,
 		get_object(),
@@ -294,6 +302,15 @@ func get_member_from_slot_id(slot_id : int, member_type : String) -> Dictionary:
 		if member["slot_id"] == slot_id:
 			return member;
 	return {};
+
+func get_members_from_slot_id(slot_id : int) -> Array:
+	var output := [];
+	for member_type in _member_cache:
+		for member_name in _member_cache[member_type]:
+			var member : Dictionary = _member_cache[member_type][member_name];
+			if member["slot_id"] == slot_id:
+				output.append(member);
+	return output;
 
 func _update_titlebar() -> void:
 	(_custom_titlebar.get_child(0) as PanelContainer).add_theme_stylebox_override("panel", _custom_titlebar_selected_stylebox if selected else _custom_titlebar_stylebox);

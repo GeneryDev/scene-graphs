@@ -154,6 +154,11 @@ func get_current_mid_point_offset() -> Vector2:
 func apply_mid_point_offset_change() -> void:
 	mid_point_offset = get_current_mid_point_offset();
 	update_view();
+
+func reset_mid_point_offset() -> void:
+	mid_point_offset = Vector2.ZERO;
+	update_view();
+	editor.invalidate_connection_line_cache();
 	
 func _on_position_offset_changed() -> void:
 	if editor.dragging:

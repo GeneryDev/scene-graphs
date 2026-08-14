@@ -17,7 +17,7 @@ func _init(editor : SceneGraphEditor):
 	editor.delete_nodes_request.connect(_on_delete_nodes_request);
 	
 func get_scene_graph_capabilities() -> Array[String]:
-	return ["configure_capabilities","configure_port_types","populate_graph_nodes_from_view","drag_and_drop","handle_view_object_types"];
+	return ["configure_capabilities","configure_port_types","populate_graph_nodes_from_view","drag_and_drop","handle_view_object_types","populate_popup_menu"];
 
 ### CAPABILITY: configure_capabilities
 func configure_capabilities() -> void:
@@ -169,4 +169,59 @@ func _on_connection_drag_ended() -> void:
 					else editor.member_selector.get_all_output_member_types(),
 				editor.current_view.transactions.add_object_view_member
 			);
-		
+
+### CAPABILITY: populate_popup_menu
+const ACTION_MANAGE_MEMBERS : int = 200;
+const ACTION_MEMBER_REMOVE : int = 210;
+
+func populate_popup_menu(at_position : Vector2, menu : PopupMenu, actions : Dictionary[int, Callable]) -> void:
+	var hovered_element := editor.get_graph_element_at_position(at_position);
+	if !is_instance_of(hovered_element, SceneObjectGraphNode): return;
+	var graph_node : GraphNode = hovered_element;
+#	var slot_index := 0;
+#	var at_local_position := (at_position - graph_node.position) / editor.zoom;
+#	var hovered_slot_index := -1;
+#	for child in graph_node.get_children():
+#		if child is not Control: continue;
+#		var slot : Control = child;
+#		var slot_rect := slot.get_rect();
+#		if slot_rect.has_point(Vector2(slot_rect.get_center().x, at_local_position.y)):
+#			hovered_slot_index = slot_index;
+#		slot_index += 1;
+	
+	menu.add_separator("Scene Object");
+	menu.add_icon_item(EditorInterface.get_editor_theme().get_icon(&"Edit",&"EditorIcons"), "Manage Members", ACTION_MANAGE_MEMBERS);
+	actions[ACTION_MANAGE_MEMBERS] = _action_manage_members.bind(graph_node);
+	menu.add_separator("Object Members");
+	for member_type in graph_node._member_cache:
+		for member_name in graph_node._member_cache[member_type]:
+			var member : Dictionary = graph_node._member_cache[member_type][member_name];
+			var submenu_label : String = member_type.capitalize() + " " + member_name;
+			var submenu := PopupMenu.new();
+			menu.add_child(submenu);
+			menu.add_submenu_node_item(submenu_label, submenu);
+			
+			submenu.add_item("Remove Member from View", ACTION_MEMBER_REMOVE);
+			submenu.id_pressed.connect(_member_submenu_id_pressed.bind(member));
+
+func _action_manage_members(graph_node : GraphNode) -> void:
+	var selected_nodes := [];
+	
+	for name in editor.selected_nodes:
+		var node := editor.get_node_or_null(NodePath(name));
+		if !is_instance_of(node, SceneObjectGraphNode): continue;
+		selected_nodes.append(node);
+	if selected_nodes.size() == 1:
+		graph_node.manage_members();
+	else:
+		EditorInterface.get_editor_toaster().push_toast("Managing members of multiple nodes is not currently supported.\nOnly editing '%s'" % [graph_node.get_object_name()], EditorToaster.SEVERITY_INFO);
+		graph_node.manage_members();
+
+func _member_submenu_id_pressed(id : int, member : Dictionary) -> void:
+	for name in editor.selected_nodes:
+		var node := editor.get_node_or_null(NodePath(name));
+		if !is_instance_of(node, SceneObjectGraphNode): continue;
+		var graph_node : GraphNode = node;
+		match id:
+			ACTION_MEMBER_REMOVE:
+				editor.current_view.transactions.remove_object_view_member(graph_node.object_type, graph_node.get_object(), member.member_type, member.member_name);
