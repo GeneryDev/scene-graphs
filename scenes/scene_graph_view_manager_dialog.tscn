@@ -1,5 +1,9 @@
 [gd_scene format=3 uid="uid://ronsawixom53"]
 
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_g7hei"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_7m61j"]
+
 [node name="Scene Graph View Dialog" type="AcceptDialog" unique_id=423649529]
 oversampling_override = 1.0
 title = "Edit Scene Graph Views"
@@ -76,9 +80,11 @@ layout_mode = 2
 
 [node name="Label" type="Label" parent="Content/VBoxContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=1718429983]
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_g7hei")
 text = "• Graph nodes in view: "
 
 [node name="Graph Node Count" type="Label" parent="Content/VBoxContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=2002133241]
 unique_name_in_owner = true
 layout_mode = 2
-text = "100"
+theme_override_styles/normal = SubResource("StyleBoxEmpty_7m61j")
+text = "0"
