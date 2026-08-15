@@ -87,7 +87,7 @@ func _has_main_screen() -> bool:
 	return is_main_screen;
 	
 func _get_plugin_icon() -> Texture2D:
-	return EditorInterface.get_editor_theme().get_icon("Signals", "EditorIcons");
+	return load("res://addons/scene-graphs/icons/icon.svg");
 
 class Settings extends RefCounted:
 	const PROJECT_SETTING_PLUGIN_MODE := &"scene_graphs/editor/plugin_mode";
