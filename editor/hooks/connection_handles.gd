@@ -63,25 +63,30 @@ func _refresh_connection_elements() -> void:
 		
 	var options : Options = editor.current_view.get_hook_options(self);
 	
-	for connection : Dictionary in editor.connections:
+	for graph_connection : Dictionary in editor.connections:
 		if !options.handles_enabled: break;
-		if !editor.is_connection_ready(connection): continue;
+		if !editor.is_connection_ready(graph_connection): continue;
 		
-		var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.from_node));
-		var to_graph_node : GraphNode = editor.get_node_or_null(NodePath(connection.to_node));
+		var from_graph_node : GraphNode = editor.get_node_or_null(NodePath(graph_connection.from_node));
+		var to_graph_node : GraphNode = editor.get_node_or_null(NodePath(graph_connection.to_node));
 		
 		if !is_instance_of(from_graph_node, SceneObjectGraphNode): continue;
 		if !is_instance_of(to_graph_node, SceneObjectGraphNode): continue;
 		
+		var from_member : Dictionary = from_graph_node.get_member_from_port_id_and_side(graph_connection.from_port, "right");
+		var to_member : Dictionary = to_graph_node.get_member_from_port_id_and_side(graph_connection.to_port, "left");
+		
+		if !from_member || !to_member: continue;
+		
 		var member_connection := {
 			"from_object_type": from_graph_node.object_type,
 			"from_object": from_graph_node.get_object_key(),
-			"from_member_type": from_graph_node.get_member_from_port_id(connection.from_port).member_type,
-			"from_member_name": from_graph_node.get_member_from_port_id(connection.from_port).member_name,
+			"from_member_type": from_member.member_type,
+			"from_member_name": from_member.member_name,
 			"to_object_type": to_graph_node.object_type,
 			"to_object": to_graph_node.get_object_key(),
-			"to_member_type": to_graph_node.get_member_from_port_id(connection.to_port).member_type,
-			"to_member_name": to_graph_node.get_member_from_port_id(connection.to_port).member_name
+			"to_member_type": to_member.member_type,
+			"to_member_name": to_member.member_name
 		};
 		
 		var matching_cached_connection : Dictionary;
@@ -96,18 +101,19 @@ func _refresh_connection_elements() -> void:
 			if cached_connection.to_graph_node.is_queued_for_deletion(): continue;
 			cached_connection.still_valid = true;
 			matching_cached_connection = cached_connection;
-			cached_connection.graph_element.graph_connection = connection;
+			cached_connection.graph_connection = graph_connection;
+			cached_connection.graph_element.graph_connection = graph_connection;
 		
 		if !matching_cached_connection:
-			var graph_element : GraphElement = ConnectionHandleElement.new(connection, member_connection, editor);
+			var graph_element : GraphElement = ConnectionHandleElement.new(graph_connection, member_connection, editor);
 			editor.connections_layer.add_sibling(graph_element, false);
 			matching_cached_connection = {
-				"connection": connection,
+				"graph_connection": graph_connection,
 				"member_connection": member_connection,
 				"graph_element": graph_element,
-				"still_valid": true,
 				"from_graph_node": from_graph_node,
-				"to_graph_node": to_graph_node
+				"to_graph_node": to_graph_node,
+				"still_valid": true
 			};
 			_connections_with_elements.append(matching_cached_connection);
 			graph_element.update_from_view();
@@ -127,16 +133,16 @@ func _refresh_connection_elements() -> void:
 	_invalidate_line_end_cache.call_deferred();
 
 func _reposition_connection_element(cached_connection : Dictionary) -> void:
-	var connection : Dictionary = cached_connection.connection;
+	var graph_connection : Dictionary = cached_connection.graph_connection;
 	var graph_element : GraphElement = cached_connection.graph_element;
 	if !is_instance_valid(cached_connection.from_graph_node): return;
 	var from_graph_node : GraphNode = cached_connection.from_graph_node;
 	var to_graph_node : GraphNode = cached_connection.to_graph_node;
 	if !from_graph_node || !to_graph_node: return;
-	if connection.from_port >= from_graph_node.get_output_port_count(): return;
-	if connection.to_port >= to_graph_node.get_input_port_count(): return;
-	var line_from := (from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset);
-	var line_to := (to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset);
+	if graph_connection.from_port >= from_graph_node.get_output_port_count(): return;
+	if graph_connection.to_port >= to_graph_node.get_input_port_count(): return;
+	var line_from := (from_graph_node.get_output_port_position(graph_connection.from_port) + from_graph_node.position_offset);
+	var line_to := (to_graph_node.get_input_port_position(graph_connection.to_port) + to_graph_node.position_offset);
 	var line : PackedVector2Array = editor.get_connection_line(line_from, line_to);
 	var mid_point_straight := (line_from + line_to) / 2;
 	var mid_point := line[line.size()/2] if line.size() % 2 == 1 else (line[line.size()/2-1]+line[line.size()/2])/2;
@@ -218,7 +224,7 @@ func _invalidate_line_end_cache() -> void:
 func _update_line_end_cache() -> void:
 	_line_end_cache.clear();
 	for cached_connection : Dictionary in _connections_with_elements:
-		var connection = cached_connection.connection;
+		var graph_connection = cached_connection.graph_connection;
 		cached_connection.line_ends_absolute = [Vector2(0,0),Vector2(0,0)];
 		cached_connection.line_ends_view = [Vector2(0,0),Vector2(0,0)];
 		
@@ -230,10 +236,10 @@ func _update_line_end_cache() -> void:
 		var to_graph_node : GraphNode = cached_connection.to_graph_node;
 		if !from_graph_node || !to_graph_node:
 			continue;
-		if connection.from_port >= from_graph_node.get_output_port_count(): continue;
-		if connection.to_port >= to_graph_node.get_input_port_count(): continue;
-		var from_absolute := from_graph_node.get_output_port_position(connection.from_port) + from_graph_node.position_offset;
-		var to_absolute := to_graph_node.get_input_port_position(connection.to_port) + to_graph_node.position_offset;
+		if graph_connection.from_port >= from_graph_node.get_output_port_count(): continue;
+		if graph_connection.to_port >= to_graph_node.get_input_port_count(): continue;
+		var from_absolute := from_graph_node.get_output_port_position(graph_connection.from_port) + from_graph_node.position_offset;
+		var to_absolute := to_graph_node.get_input_port_position(graph_connection.to_port) + to_graph_node.position_offset;
 		var from_view := from_absolute * editor.zoom;
 		var to_view := to_absolute * editor.zoom;
 		cached_connection.line_ends_absolute[0] = from_absolute;

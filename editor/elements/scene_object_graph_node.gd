@@ -242,14 +242,16 @@ func create_and_add_contents() -> void:
 			right_port.get("port_color",Color.WHITE)
 			);
 		if slot.has("member"):
-			_add_member_to_cache(slot.member.member_type, slot.member.member_name, slot_index, -1);
+			_add_member_to_cache(slot.member.member_type, slot.member.member_name, slot_index, -1, "none");
 		if left_port:
+			set_slot_metadata_left(slot_index, left_port);
 			if left_port.has("member"):
-				_add_member_to_cache(left_port.member.member_type, left_port.member.member_name, slot_index, left_port_index);
+				_add_member_to_cache(left_port.member.member_type, left_port.member.member_name, slot_index, left_port_index, "left");
 			left_port_index += 1;
 		if right_port:
+			set_slot_metadata_right(slot_index, right_port);
 			if right_port.has("member"):
-				_add_member_to_cache(right_port.member.member_type, right_port.member.member_name, slot_index, right_port_index);
+				_add_member_to_cache(right_port.member.member_type, right_port.member.member_name, slot_index, right_port_index, "right");
 			right_port_index += 1;
 
 func manage_members() -> void:
@@ -261,38 +263,38 @@ func manage_members() -> void:
 		editor.current_view.transactions.override_object_view_members
 	);
 
-func _add_member_to_cache(member_type : String, member_name : StringName, slot_id : int, port_id : int) -> void:
+func _add_member_to_cache(member_type : String, member_name : StringName, slot_id : int, port_id : int, port_side : String) -> void:
 	_member_cache.get_or_add(member_type, {})[member_name] = {
 		"member_type": member_type,
 		"member_name": member_name,
 		"slot_id": slot_id,
-		"port_id": port_id
+		"port_id": port_id,
+		"port_side": port_side
 	};
 
-func get_member_cache(member_type : String, member_name : StringName) -> Dictionary:
+func _get_member_cache(member_type : String, member_name : StringName) -> Dictionary:
 	return _member_cache.get(member_type, {}).get(member_name, {});
 
 func get_member_port_id(member_type : String, member_name : StringName) -> int:
-	return get_member_cache(member_type, member_name).get("port_id", -1);
+	return _get_member_cache(member_type, member_name).get("port_id", -1);
 
 func get_member_slot_id(member_type : String, member_name : StringName) -> int:
-	return get_member_cache(member_type, member_name).get("slot_id", -1);
+	return _get_member_cache(member_type, member_name).get("slot_id", -1);
 
-func get_member_from_port_id(port_id : int, member_type : String = "") -> Dictionary:
-	if member_type:
-		# Search for a specific member type
-		if !_member_cache.has(member_type): return {};
-		for member_name in _member_cache[member_type]:
-			var member : Dictionary = _member_cache[member_type][member_name];
-			if member["port_id"] == port_id:
+func get_member_from_port_id_and_type(port_id : int, member_type : String) -> Dictionary:
+	if !_member_cache.has(member_type): return {};
+	for member_name in _member_cache[member_type]:
+		var member : Dictionary = _member_cache[member_type][member_name];
+		if member["port_id"] == port_id:
+			return member;
+	return {};
+
+func get_member_from_port_id_and_side(port_id : int, side : String) -> Dictionary:
+	for entry_member_type in _member_cache:
+		for member_name in _member_cache[entry_member_type]:
+			var member : Dictionary = _member_cache[entry_member_type][member_name];
+			if member["port_id"] == port_id && member["port_side"] == side:
 				return member;
-	else:
-		# Search for all member types
-		for entry_member_type in _member_cache:
-			for member_name in _member_cache[entry_member_type]:
-				var member : Dictionary = _member_cache[entry_member_type][member_name];
-				if member["port_id"] == port_id:
-					return member;
 	return {};
 
 func get_member_from_slot_id(slot_id : int, member_type : String) -> Dictionary:

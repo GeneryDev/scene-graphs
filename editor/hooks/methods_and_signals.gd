@@ -116,8 +116,8 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	var to_object : Object = to_graph_node.get_object();
 	
 	if port_pair == [editor.port_type(&"signal"), editor.port_type(&"method")]:
-		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_METHOD).member_name);
-		var signal_name : StringName = from_graph_node.get_member_from_port_id(from_port, MEMBER_TYPE_SIGNAL).member_name;
+		var callable := Callable(to_object, to_graph_node.get_member_from_port_id_and_type(to_port, MEMBER_TYPE_METHOD).member_name);
+		var signal_name : StringName = from_graph_node.get_member_from_port_id_and_type(from_port, MEMBER_TYPE_SIGNAL).member_name;
 		
 		var undo_redo := EditorInterface.get_editor_undo_redo();
 		undo_redo.create_action("Connect signal", UndoRedo.MERGE_ALL, editor.scene_root, false);
@@ -127,7 +127,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 		undo_redo.add_undo_method(self, &"notify_scene_connections_updated");
 		undo_redo.commit_action();
 	elif port_pair == [editor.port_type(&"wildcard_out"), editor.port_type(&"method")]:
-		var callable := Callable(to_object, to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_METHOD).member_name);
+		var callable := Callable(to_object, to_graph_node.get_member_from_port_id_and_type(to_port, MEMBER_TYPE_METHOD).member_name);
 		editor.member_selector.show_single_select(from_graph_node.object_type, from_object, [MEMBER_TYPE_SIGNAL], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
 			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
 			var signal_name = selected_member;
@@ -141,7 +141,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 			undo_redo.commit_action();
 		);
 	elif port_pair == [editor.port_type(&"signal"), editor.port_type(&"wildcard_in")]:
-		var signal_name : StringName = from_graph_node.get_member_from_port_id(from_port, MEMBER_TYPE_SIGNAL).member_name;
+		var signal_name : StringName = from_graph_node.get_member_from_port_id_and_type(from_port, MEMBER_TYPE_SIGNAL).member_name;
 		editor.member_selector.show_single_select(to_graph_node.object_type, to_object, [MEMBER_TYPE_METHOD], func (selected_object_type, selected_object, selected_member_type, selected_member) -> void:
 			editor.current_view.transactions.add_object_view_member(selected_object_type, selected_object, selected_member_type, selected_member);
 			var callable := Callable(to_object, selected_member);
@@ -166,8 +166,8 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	
 	var from_object : Object = from_graph_node.get_object();
 	var to_object : Object = to_graph_node.get_object();
-	var callable := Callable(to_object, to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_METHOD).member_name);
-	var signal_name : StringName = from_graph_node.get_member_from_port_id(from_port, MEMBER_TYPE_SIGNAL).member_name;
+	var callable := Callable(to_object, to_graph_node.get_member_from_port_id_and_type(to_port, MEMBER_TYPE_METHOD).member_name);
+	var signal_name : StringName = from_graph_node.get_member_from_port_id_and_type(from_port, MEMBER_TYPE_SIGNAL).member_name;
 	var flags := ConnectFlags.CONNECT_PERSIST;
 	for connection in from_object.get_signal_connection_list(signal_name):
 		var connection_callable := connection["callable"] as Callable;

@@ -178,16 +178,6 @@ func populate_popup_menu(at_position : Vector2, menu : PopupMenu, actions : Dict
 	var hovered_element := editor.get_graph_element_at_position(at_position);
 	if !is_instance_of(hovered_element, SceneObjectGraphNode): return;
 	var graph_node : GraphNode = hovered_element;
-#	var slot_index := 0;
-#	var at_local_position := (at_position - graph_node.position) / editor.zoom;
-#	var hovered_slot_index := -1;
-#	for child in graph_node.get_children():
-#		if child is not Control: continue;
-#		var slot : Control = child;
-#		var slot_rect := slot.get_rect();
-#		if slot_rect.has_point(Vector2(slot_rect.get_center().x, at_local_position.y)):
-#			hovered_slot_index = slot_index;
-#		slot_index += 1;
 	
 	menu.add_separator("Scene Object");
 	menu.add_icon_item(EditorInterface.get_editor_theme().get_icon(&"Edit",&"EditorIcons"), "Manage Members", ACTION_MANAGE_MEMBERS);

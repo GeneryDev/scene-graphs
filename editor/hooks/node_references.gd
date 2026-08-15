@@ -119,7 +119,7 @@ func _on_connection_request(from_node_name : StringName, from_port : int, to_nod
 	
 	if port_pair == [editor.port_type(&"node_reference_out"), editor.port_type(&"node_reference")] || port_pair == [editor.port_type(&"wildcard_out"), editor.port_type(&"node_reference")]:
 		editor.current_view.transactions.add_object_view_member(from_graph_node.object_type, from_object, MEMBER_TYPE_NODE_REFERENCE_OUT, &"");
-		var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
+		var property_name : StringName = to_graph_node.get_member_from_port_id_and_type(to_port, MEMBER_TYPE_PROPERTY).member_name;
 		var property_info := Utility.get_property_info_by_name(to_object, property_name);
 		if !Utility.is_property_node_reference(property_info):
 			EditorInterface.get_editor_toaster().push_toast("Node reference connections can only be made to NodePath or Node-derived properties", EditorToaster.SEVERITY_ERROR);
@@ -171,7 +171,7 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 	
 	var to_object : Object = to_graph_node.get_object();
 	
-	var property_name : StringName = to_graph_node.get_member_from_port_id(to_port, MEMBER_TYPE_PROPERTY).member_name;
+	var property_name : StringName = to_graph_node.get_member_from_port_id_and_type(to_port, MEMBER_TYPE_PROPERTY).member_name;
 	var property_info := Utility.get_property_info_by_name(to_object, property_name);
 	var new_value : Variant = null;
 	if property_info.type == TYPE_NODE_PATH:
