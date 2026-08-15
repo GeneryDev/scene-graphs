@@ -70,13 +70,13 @@ func load(view : SceneGraphView) -> void:
 	current_view = view;
 	if view:
 		view.update_object_views_with_rules();
-		view.update_all_object_member_views_with_rules();
+		view.update_all_object_view_members_with_rules();
 	
 		_update_nav_from_view();
 	else:
 		view.clear_all_objects();
 		view.update_object_views_with_rules();
-		view.update_all_object_member_views_with_rules();
+		view.update_all_object_view_members_with_rules();
 	
 	view.notify_view_updated();
 	
@@ -104,6 +104,7 @@ func _on_current_view_updated():
 	for hook in hooks.populate_graph_node_connections:
 		hook.populate_graph_node_connections();
 	view_updated.emit();
+	arranger.flush_arrange();
 
 func rearrange_after_load():
 	_pending_initial_draw = false;

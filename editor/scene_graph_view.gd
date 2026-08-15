@@ -274,7 +274,7 @@ func get_hook_options(hook : Object) -> Variant:
 	return hook_options_from_dict(hook, raw_hook_options);
 
 func get_view_rules_of_type(rule_type : String) -> Array:
-	return view_rules.get_or_add(rule_type, {});
+	return view_rules.get_or_add(rule_type, []);
 
 func update_object_views_with_rules() -> void:
 	var objects := generate_object_list_with_rules();
@@ -294,27 +294,64 @@ func generate_object_list_with_rules() -> Array:
 		generated_objects.append_array(objects);
 	return generated_objects;
 
-func update_object_member_views_with_rules(object_type : String, obj : Object) -> void:
-	var members := generate_object_member_list_with_rules(object_type, obj);
+func add_object_view_members(members : Array, fallback_object_type : String, fallback_object : Object) -> Dictionary:
+	var output := {
+		"success": false,
+		"added_object_views": [],
+		"added_member_views": []
+	};
 	for member in members:
 		var member_type : String = member.member_type;
 		var member_name : StringName = member.member_name;
-		var entry_object_type : String = member.get("object_type", object_type);
-		var entry_object : Object = member.get("object", obj);
-		add_object_view_member(entry_object_type, entry_object, member_type, member_name);
+		var entry_object_type : String = member.get("object_type", fallback_object_type);
+		var entry_object : Object = member.get("object", fallback_object);
+		if !has_object_view(entry_object_type, entry_object):
+			output.added_object_views.append({"object_type": entry_object_type, "object": entry_object});
+			add_object_view(entry_object_type, entry_object);
+		if add_object_view_member(entry_object_type, entry_object, member_type, member_name):
+			output.added_member_views.append({"object_type": entry_object_type, "object": entry_object, "member_type": member_type, "member_name": member_name});
+			output.success = true;
+	return output;
+
+func remove_object_view_members(members : Array, fallback_object_type : String, fallback_object : Object) -> Dictionary:
+	var output := {
+		"success": false,
+		"removed_member_views": []
+	};
+	for member in members:
+		var member_type : String = member.member_type;
+		var member_name : StringName = member.member_name;
+		var entry_object_type : String = member.get("object_type", fallback_object_type);
+		var entry_object : Object = member.get("object", fallback_object);
+		if !has_object_view(entry_object_type, entry_object): continue;
+		if remove_object_view_member(entry_object_type, entry_object, member_type, member_name):
+			output.removed_member_views.append({"object_type": entry_object_type, "object": entry_object, "member_type": member_type, "member_name": member_name});
+			output.success = true;
+	return output;
+
+func update_object_view_members_with_rules(object_type : String, obj : Object) -> Dictionary:
+	var members := generate_object_member_list_with_rules(object_type, obj);
+	return add_object_view_members(members, object_type, obj);
 
 func generate_object_member_list_with_rules(object_type : String, obj : Object) -> Array:
 	var generated_members := [];
 	for rule_entry in get_view_rules_of_type("member_source"):
-		var id : String = rule_entry.id;
-		var raw_params : Dictionary = rule_entry.get("params");
-		var rule_hook := get_view_rule_hook(id, "member_source");
-		if !rule_hook: continue;
-		var members : Array = rule_hook.generate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
-		generated_members.append_array(members);
+		generated_members.append_array(generate_object_member_list_with_rule(object_type, obj, rule_entry));
 	return generated_members;
 
-func update_all_object_member_views_with_rules() -> void:
+func generate_object_member_list_with_rule(object_type : String, obj : Object, rule_entry : Dictionary) -> Array:
+	var id : String = rule_entry.id;
+	var raw_params : Dictionary = rule_entry.get("params");
+	var rule_hook := get_view_rule_hook(id, "member_source");
+	if !rule_hook: return [];
+	return rule_hook.generate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
+
+func update_all_object_view_members_with_rules() -> Dictionary:
+	var output := {
+		"success": false,
+		"added_object_views": [],
+		"added_member_views": []
+	};
 	for object_type in get_all_scene_object_views():
 		var object_views : Dictionary = get_scene_object_views(object_type);
 		
@@ -327,14 +364,11 @@ func update_all_object_member_views_with_rules() -> void:
 				var obj : Object = object_key_to_view_object(object_type, object_key);
 				if !obj: continue;
 				var members : Array = rule_hook.generate_view_object_members(object_type, obj, rule_params_from_dict(rule_hook, raw_params));
-				for member in members:
-					var member_type : String = member.member_type;
-					var member_name : String = member.member_name;
-					var entry_object_type : String = member.get("object_type", object_type);
-					var entry_object : Object = member.get("object", obj);
-					if !has_object_view(entry_object_type, entry_object):
-						add_object_view(entry_object_type, entry_object);
-					add_object_view_member(entry_object_type, entry_object, member_type, member_name);
+				var result := add_object_view_members(members, object_type, obj);
+				output.added_object_views.append_array(result.added_object_views);
+				output.added_member_views.append_array(result.added_member_views);
+				output.success |= result.success;
+	return output;
 
 func get_scene_object_count() -> int:
 	var total := 0;
@@ -410,14 +444,15 @@ class Transactions extends RefCounted:
 		self.editor = editor;
 		self.view = view;
 		
-	func add_object_view(object_type : String, obj : Object, position_offset : Vector2) -> void:
+	func add_object_view(object_type : String, obj : Object, position_offset = null) -> void:
 		if view.has_object_view(object_type, obj):
 			view.select_object(object_type, obj);
 		else:
 			view.add_object_view(object_type, obj);
 			var obj_view := view.get_object_view(object_type, obj);
-			obj_view["position_offset"] = position_offset;
-			view.update_object_member_views_with_rules(object_type, obj);
+			if position_offset != null:
+				obj_view["position_offset"] = position_offset as Vector2;
+			view.update_object_view_members_with_rules(object_type, obj);
 			view.notify_view_updated();
 			view.select_object(object_type, obj);
 			
@@ -429,6 +464,69 @@ class Transactions extends RefCounted:
 			undo_redo.add_undo_method(view, &"remove_object_view", object_type, obj);
 			undo_redo.add_undo_method(view, &"notify_view_updated");
 			undo_redo.commit_action(false);
+		
+	func add_object_views(objects : Array) -> void:
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		var transaction_name := "Add object views";
+		
+		# Add object views first (with no members)
+		for object in objects:
+			var object_type : String = object.object_type;
+			var obj : Object = object.object;
+			var position_offset = object.get("position_offset");
+			if !view.has_object_view(object_type, obj):
+				view.add_object_view(object_type, obj);
+				var obj_view := view.get_object_view(object_type, obj);
+				if position_offset != null:
+					obj_view["position_offset"] = position_offset as Vector2;
+				
+				undo_redo.create_action(transaction_name, UndoRedo.MERGE_ALL, editor.scene_root, true);
+				undo_redo.add_do_method(view, &"set_object_view", object_type, obj, obj_view);
+				undo_redo.add_do_method(view, &"notify_view_updated");
+				undo_redo.add_do_method(view, &"select_object", object_type, obj);
+				undo_redo.add_undo_method(view, &"notify_view_updated");
+				undo_redo.add_undo_method(view, &"remove_object_view", object_type, obj);
+				undo_redo.commit_action(false);
+		
+		# Then add members, update
+		var extra_added_object_views := [];
+		for object in objects:
+			var object_type : String = object.object_type;
+			var obj : Object = object.object;
+			var result := view.update_object_view_members_with_rules(object_type, obj);
+			for extra in result.added_object_views:
+				if extra_added_object_views.has(extra): continue;
+				undo_redo.create_action(transaction_name, UndoRedo.MERGE_ALL, editor.scene_root, true);
+				var extra_obj_view := view.get_object_view(extra.object_type, extra.object);
+				undo_redo.add_do_method(view, &"set_object_view", extra.object_type, extra.object, extra_obj_view);
+				undo_redo.add_undo_method(view, &"remove_object_view", extra.object_type, extra.object);
+				undo_redo.commit_action(false);
+		
+		view.notify_view_updated();
+		
+		# Then select
+		for object in objects:
+			var object_type : String = object.object_type;
+			var obj : Object = object.object;
+			view.select_object.call_deferred(object_type, obj);
+		
+	func remove_object_views(objects : Array) -> void:
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		var transaction_name := "Remove object views";
+		
+		for object in objects:
+			var object_type : String = object.object_type;
+			var obj : Object = object.object;
+			if !view.has_object_view(object_type, obj):
+				return;
+			var obj_view := view.get_object_view(object_type, obj);
+			undo_redo.create_action(transaction_name, UndoRedo.MERGE_ALL, editor.scene_root, true);
+			undo_redo.add_do_method(view, &"remove_object_view", object_type, obj);
+			undo_redo.add_do_method(view, &"notify_view_updated");
+			undo_redo.add_undo_method(view, &"select_object", object_type, obj);
+			undo_redo.add_undo_method(view, &"notify_view_updated");
+			undo_redo.add_undo_method(view, &"set_object_view", object_type, obj, obj_view);
+			undo_redo.commit_action();
 	
 	func remove_object_view(object_type : String, obj : Object) -> void:
 		if !view.has_object_view(object_type, obj):
@@ -453,6 +551,36 @@ class Transactions extends RefCounted:
 		undo_redo.create_action("Add object view member", UndoRedo.MERGE_ALL, editor.scene_root, false);
 		undo_redo.add_do_method(view, &"add_object_view_member", object_type, obj, member_type, member_name);
 		undo_redo.add_undo_method(view, &"remove_object_view_member", object_type, obj, member_type, member_name);
+		undo_redo.add_do_method(view, &"notify_view_updated");
+		undo_redo.add_undo_method(view, &"notify_view_updated");
+		undo_redo.commit_action(false);
+	
+	func add_object_view_members(members : Array, fallback_object_type : String = "", fallback_object : Object = null) -> void:
+		var result := view.add_object_view_members(members, fallback_object_type, fallback_object);
+		if !result.success:
+			return;
+		view.notify_view_updated();
+		
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Add object view members", UndoRedo.MERGE_ALL, editor.scene_root, false);
+		undo_redo.add_do_method(view, &"add_object_view_members", members, fallback_object_type, fallback_object);
+		undo_redo.add_undo_method(view, &"remove_object_view_members", result.added_member_views, fallback_object_type, fallback_object);
+		for object in result.added_object_views:
+			undo_redo.add_undo_method(view, &"remove_object_view", object.object_type, object.object);
+		undo_redo.add_do_method(view, &"notify_view_updated");
+		undo_redo.add_undo_method(view, &"notify_view_updated");
+		undo_redo.commit_action(false);
+	
+	func remove_object_view_members(members : Array, fallback_object_type : String = "", fallback_object : Object = null) -> void:
+		var result := view.remove_object_view_members(members, fallback_object_type, fallback_object);
+		if !result.success:
+			return;
+		view.notify_view_updated();
+		
+		var undo_redo := EditorInterface.get_editor_undo_redo();
+		undo_redo.create_action("Remove object view members", UndoRedo.MERGE_ALL, editor.scene_root, false);
+		undo_redo.add_do_method(view, &"remove_object_view_members", result.removed_member_views, fallback_object_type, fallback_object);
+		undo_redo.add_undo_method(view, &"add_object_view_members", result.removed_member_views, fallback_object_type, fallback_object);
 		undo_redo.add_do_method(view, &"notify_view_updated");
 		undo_redo.add_undo_method(view, &"notify_view_updated");
 		undo_redo.commit_action(false);
