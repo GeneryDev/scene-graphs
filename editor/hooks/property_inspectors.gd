@@ -237,4 +237,4 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			return control;
 	
 class Options extends RefCounted:
-	@export var enable_property_inspectors : bool = false;
+	@export var enable_property_inspectors : bool = true;
