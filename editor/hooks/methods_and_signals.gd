@@ -718,4 +718,4 @@ class ConnectionHandleExtension extends RefCounted:
 		if updated: element.queue_redraw();
 
 class Options extends RefCounted:
-	@export var enable_method_and_signal_ports : bool = true;
+	@export var enable_method_and_signal_ports : bool = false;
