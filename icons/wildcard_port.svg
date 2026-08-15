@@ -23,7 +23,7 @@
      inkscape:deskcolor="#d1d1d1"
      showguides="true"
      inkscape:zoom="16"
-     inkscape:cx="16.46875"
+     inkscape:cx="16.5"
      inkscape:cy="27.28125"
      inkscape:window-width="2560"
      inkscape:window-height="1417"
@@ -61,7 +61,7 @@
      ry="1.9710127" />
   <path
      style="fill:#ffffff;fill-opacity:1;stroke:#141414;stroke-width:3;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
-     d="m 12.069865,3.8321714 -2.6054413,5.6431203 -5.5555294,2.4907933 5.7307114,2.427343 2.4302593,5.741091 2.557039,-5.54515 5.584338,-2.623284 -5.701903,-2.4907933 z"
+     d="m 12.069865,3.8321714 -8.1609707,8.1339136 8.1609707,8.168434 8.141377,-8.168434 z"
      id="path2"
-     sodipodi:nodetypes="ccccccccc" />
+     sodipodi:nodetypes="ccccc" />
 </svg>
