@@ -367,7 +367,7 @@ func update_all_object_view_members_with_rules() -> Dictionary:
 				var result := add_object_view_members(members, object_type, obj);
 				output.added_object_views.append_array(result.added_object_views);
 				output.added_member_views.append_array(result.added_member_views);
-				output.success |= result.success;
+				output.success = output.success || result.success;
 	return output;
 
 func get_scene_object_count() -> int:
