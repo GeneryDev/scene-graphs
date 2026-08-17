@@ -155,7 +155,6 @@ func _reposition_connection_element(cached_connection : Dictionary) -> void:
 		new_position = mid_point;
 		rotation = (line_to - line_from).angle();
 	graph_element.reposition(new_position, rotation);
-#	graph_element.update_connection_info();
 
 ### CAPABILITY: override_connection_lines
 

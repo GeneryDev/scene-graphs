@@ -189,9 +189,6 @@ func _on_disconnection_request(from_node_name : StringName, from_port : int, to_
 
 func _on_connections_changed() -> void:
 	pass;
-#	for child : Node in editor.get_children():
-#		if !is_instance_of(child, SceneObjectGraphNode):
-#			continue;
 
 func is_enabled() -> bool:
 	return editor.current_view.get_hook_options(self).enable_node_reference_ports;

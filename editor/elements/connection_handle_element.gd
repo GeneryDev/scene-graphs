@@ -87,9 +87,6 @@ func _draw() -> void:
 			break;
 	if !drawn: 
 		draw_dot_handle(center, connection_rotation, VISUAL_RADIUS);
-	
-#	draw_arrow_handle(center, connection_rotation, VISUAL_RADIUS);
-#	draw_string(get_theme_default_font(), center, str(get_handle_view_data()));
 
 func draw_arrow_handle(center : Vector2, rotation : float, size : float) -> void:
 	var arrow_poly := PackedVector2Array([

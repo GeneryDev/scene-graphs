@@ -208,20 +208,16 @@ class Persistence extends RefCounted:
 		plugin.plugin_enabled.connect(_on_plugin_enabled);
 	
 	func _on_scene_changed(scene_root : Node) -> void:
-#		print("Scene changed: " + str(scene_root));
 		var scene_state := _pending_scene_state;
 		_pending_scene_state = {};
 		
 		var saved_scene_identifier : String = scene_state.get("scene_identifier", "");
 		_active_scene_identifier = generate_scene_identifier(scene_root, saved_scene_identifier);
-#		print("Active scene identifier: " + _active_scene_identifier + " (was saved as " + saved_scene_identifier + ")");
 		
 		var scene_data := get_scene_data(_active_scene_identifier, saved_scene_identifier);
-#		print("Loaded scene data: " + str(scene_data));
 		plugin._dock.set_scene_state(scene_data);
 	
 	func _on_scene_closed(filepath : String) -> void:
-#		print("Scene closed: " + filepath);
 		if filepath:
 			var scene_identifier := generate_scene_identifier_from_path(filepath);
 			scene_data_cache.erase(scene_identifier);
@@ -229,7 +225,6 @@ class Persistence extends RefCounted:
 		pass;
 	
 	func _on_scene_saved(filepath : String) -> void:
-#		print("Scene saved: " + filepath);
 		if filepath:
 			var scene_identifier := generate_scene_identifier_from_path(filepath);
 			if scene_data_cache.has(scene_identifier):
@@ -237,7 +232,6 @@ class Persistence extends RefCounted:
 				_save_scene_data(scene_identifier, scene_data_cache[scene_identifier]);
 	
 	func set_scene_state(state : Dictionary) -> void:
-#		print("Set scene state: " + str(state));
 		if state.has("scene_identifier"):
 			_active_scene_identifier = state["scene_identifier"];
 		_pending_scene_state = state;
@@ -248,7 +242,6 @@ class Persistence extends RefCounted:
 		};
 		var scene_data : Dictionary = plugin._dock.get_scene_state();
 		set_scene_data(_active_scene_identifier, scene_data);
-#		print("Saving state: " + str(state));
 		return state;
 	
 	func generate_scene_identifier(node : Node, prev_saved : String) -> String:
@@ -280,7 +273,6 @@ class Persistence extends RefCounted:
 		DirAccess.make_dir_recursive_absolute(path.get_base_dir());
 		var config_file := ConfigFile.new();
 		config_file.set_value(CONFIG_SECTION_NAME, "scene_data", scene_data);
-#		print("Saved scene data to " + path + ": " + str(scene_data));
 		var err := config_file.save(path);
 		if err != OK:
 			printerr("Failed to save to " + path + ": " + error_string(err));
@@ -324,7 +316,6 @@ class Persistence extends RefCounted:
 		DirAccess.make_dir_recursive_absolute(path.get_base_dir());
 		var config_file := ConfigFile.new();
 		config_file.set_value(CONFIG_SECTION_NAME, "editor_data", editor_data);
-#		print("Saved editor data to " + path + ": " + str(editor_data));
 		var err := config_file.save(path);
 		if err != OK:
 			printerr("Failed to save to " + path + ": " + error_string(err));

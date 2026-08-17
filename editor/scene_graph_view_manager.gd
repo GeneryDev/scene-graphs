@@ -692,8 +692,6 @@ class EditViewsDialog extends RefCounted:
 		output["clear_button"] = clear_button;
 		clear_button.pressed.connect(_clear_local_view_data, CONNECT_DEFERRED);
 		
-#		scene_name_label.add_theme_font_override("font", theme.get_font(&"bold", &"EditorFonts"));
-		
 		# Styles
 		var rule_header_stylebox := StyleBoxFlat.new();
 		rule_header_stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.25);

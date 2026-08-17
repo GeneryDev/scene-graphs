@@ -192,7 +192,6 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 	
 		var property_editor := EditorInspector.instantiate_property_editor(obj, property.type, "", property.hint, property.hint_string, property.usage);
 		property_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL;
-#		property_editor.label = property.name.capitalize();
 		property_editor.draw_label = false;
 		property_editor.set_object_and_property(obj, property.name);
 		property_editor.selectable = false;
@@ -205,11 +204,6 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			);
 		if property.hint == PROPERTY_HINT_MULTILINE_TEXT:
 			property_container.add_theme_constant_override(&"margin_top", -28);
-#			(func() -> void:
-#				property_editor.print_tree_pretty();
-#				print(property_editor.get_child(2).get_child(0).get_combined_minimum_size());
-#				property_editor.get_child(2).get_child(0).custom_minimum_size = Vector2(16,30*2);
-#			).call_deferred();
 		
 		var padding := Control.new();
 		padding.mouse_filter = Control.MOUSE_FILTER_IGNORE;
