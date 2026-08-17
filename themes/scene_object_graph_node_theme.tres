@@ -1,6 +1,7 @@
 [gd_resource type="Theme" format=3 uid="uid://p4p4144rbusq"]
 
 [ext_resource type="Texture2D" uid="uid://dgmmppttha245" path="res://addons/scene-graphs/icons/wildcard_port.svg" id="1_phen4"]
+[ext_resource type="Texture2D" uid="uid://bif3bu5gwghn3" path="res://addons/scene-graphs/icons/element_resizer.svg" id="1_wt720"]
 
 [sub_resource type="Gradient" id="Gradient_n8wmv"]
 offsets = PackedFloat32Array(1)
@@ -9,10 +10,6 @@ colors = PackedColorArray(1, 1, 1, 0)
 [sub_resource type="GradientTexture1D" id="GradientTexture1D_4ypwu"]
 gradient = SubResource("Gradient_n8wmv")
 width = 1
-
-[sub_resource type="DPITexture" id="DPITexture_phen4"]
-_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"none\" stroke=\"#fefffe\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-opacity=\".65\" stroke-width=\"2\" d=\"M11 4v7H4\"/><circle cx=\"7.5\" cy=\"7.5\" r=\"1.5\" fill=\"#b2b2b2\" fill-opacity=\".65\"/></svg>
-"
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gy6ew"]
 content_margin_left = 2.0
@@ -24,9 +21,13 @@ border_width_left = 2
 border_width_right = 2
 border_width_bottom = 2
 border_color = Color(0.085652, 0.085652, 0.085652, 1)
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 corner_detail = 4
+shadow_color = Color(0, 0, 0, 0.18431373)
+shadow_size = 8
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q545k"]
 content_margin_left = 6.0
@@ -57,11 +58,13 @@ border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
 border_color = Color(1, 1, 1, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 corner_detail = 4
+shadow_color = Color(0, 0, 0, 0.18431373)
+shadow_size = 8
 
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_f0c15"]
 color = Color(0.140572, 0.140572, 0.140572, 1)
@@ -85,8 +88,8 @@ border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_color = Color(0.085652, 0.085652, 0.085652, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
+corner_radius_top_left = 8
+corner_radius_top_right = 8
 corner_detail = 4
 expand_margin_left = 2.0
 expand_margin_top = 2.0
@@ -102,8 +105,8 @@ border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_color = Color(1, 1, 1, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
+corner_radius_top_left = 8
+corner_radius_top_right = 8
 corner_detail = 4
 expand_margin_left = 2.0
 expand_margin_top = 2.0
@@ -117,7 +120,7 @@ GraphNode/constants/port_h_offset = 1
 GraphNode/constants/separation = 1
 GraphNode/constants/wildcard_port_size = 24
 GraphNode/icons/empty = SubResource("GradientTexture1D_4ypwu")
-GraphNode/icons/resizer = SubResource("DPITexture_phen4")
+GraphNode/icons/resizer = ExtResource("1_wt720")
 GraphNode/icons/wildcard_port = ExtResource("1_phen4")
 GraphNode/styles/panel = SubResource("StyleBoxFlat_gy6ew")
 GraphNode/styles/panel_focus = SubResource("StyleBoxFlat_q545k")

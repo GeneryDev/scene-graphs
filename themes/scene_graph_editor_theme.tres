@@ -1,0 +1,96 @@
+[gd_resource type="Theme" format=3 uid="uid://bndk11e5gjol3"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_emwi3"]
+content_margin_left = 4.0
+content_margin_top = 2.0
+content_margin_right = 4.0
+content_margin_bottom = 2.0
+bg_color = Color(0.12236, 0.12236, 0.12236, 0.5)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+corner_detail = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ric0h"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.16078432, 0.16078432, 0.16078432, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+corner_detail = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dcieq"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.161, 0.161, 0.161, 1)
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.337, 0.62, 1, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+corner_detail = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q7wah"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.65, 0.65, 0.65, 0.2)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.65, 0.65, 0.65, 0.45)
+corner_detail = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vc8jd"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(1, 1, 1, 1)
+corner_detail = 1
+anti_aliasing = false
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tt1bb"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.12236, 0.12236, 0.12236, 0.3)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.12236, 0.12236, 0.12236, 1)
+corner_detail = 1
+
+[resource]
+GraphEdit/colors/activity = Color(1, 1, 1, 1)
+GraphEdit/colors/connection_hover_tint_color = Color(0, 0, 0, 0.3)
+GraphEdit/colors/connection_rim_color = Color(0.16078432, 0.16078432, 0.16078432, 1)
+GraphEdit/colors/connection_valid_target_tint_color = Color(1, 1, 1, 0.4)
+GraphEdit/colors/grid_major = Color(1, 1, 1, 0.07)
+GraphEdit/colors/grid_minor = Color(0.57700837, 0.5770084, 0.57700837, 0.07058824)
+GraphEdit/colors/selection_fill = Color(0.65, 0.65, 0.65, 0.15)
+GraphEdit/colors/selection_stroke = Color(0.55, 0.55, 0.55, 0.55)
+GraphEdit/constants/connection_hover_thickness = 0
+GraphEdit/styles/menu_panel = SubResource("StyleBoxFlat_emwi3")
+GraphEdit/styles/panel = SubResource("StyleBoxFlat_ric0h")
+GraphEdit/styles/panel_focus = SubResource("StyleBoxFlat_dcieq")
+GraphEditMinimap/colors/resizer_color = Color(1, 1, 1, 0.65)
+GraphEditMinimap/styles/camera = SubResource("StyleBoxFlat_q7wah")
+GraphEditMinimap/styles/node = SubResource("StyleBoxFlat_vc8jd")
+GraphEditMinimap/styles/panel = SubResource("StyleBoxFlat_tt1bb")

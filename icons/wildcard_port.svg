@@ -51,17 +51,17 @@
     </bx:export>
   </defs>
   <rect
-     style="fill:#141414;fill-opacity:1;stroke:#141414;stroke-width:1.24496;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
+     style="fill:#292929;fill-opacity:1;stroke:#292929;stroke-width:1.1398;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
      id="rect3"
-     width="2.2550428"
-     height="21.755043"
-     x="10.872478"
-     y="1.1224804"
-     rx="0.76744378"
-     ry="1.9710127" />
+     width="2.360199"
+     height="17.422699"
+     x="10.8199"
+     y="3.2886522"
+     rx="0.80323094"
+     ry="1.5785012" />
   <path
-     style="fill:#ffffff;fill-opacity:1;stroke:#141414;stroke-width:3;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
-     d="m 12.069865,3.8321714 -8.1609707,8.1339136 8.1609707,8.168434 8.141377,-8.168434 z"
+     style="fill:#e0e0e0;fill-opacity:1;stroke:#292929;stroke-width:2.35351;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
+     d="m 12.067479,5.5892172 -6.4022977,6.3810718 6.4022977,6.408152 6.386927,-6.408152 z"
      id="path2"
      sodipodi:nodetypes="ccccc" />
 </svg>

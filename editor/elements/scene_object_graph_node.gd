@@ -338,7 +338,6 @@ func _build_custom_titlebar() -> void:
 
 func _create_wildcard_port_control() -> TextureRect:
 	var control := TextureRect.new()
-	control.self_modulate = PORT_COLOR_WILDCARD
 	control.mouse_filter = MOUSE_FILTER_IGNORE
 	control.anchor_top = 0.5
 	control.anchor_bottom = 0.5
