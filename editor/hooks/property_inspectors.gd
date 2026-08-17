@@ -1,13 +1,12 @@
 @tool
 extends RefCounted
 
-static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
-
 const OBJECT_TYPE_NODE := "node"
 const MEMBER_TYPE_PROPERTY := "property"
 const ICON_NAME_PROPERTY := &"MemberProperty"
-
 const META_NAME_EXTENSION := &"_property_inspectors_extension"
+
+static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
 
 var editor: SceneGraphEditor
 
@@ -73,6 +72,31 @@ func get_member_selector_member_list(object_type: String, obj: Object, member_ty
 	return members
 
 
+func is_enabled() -> bool:
+	return editor.current_view.get_hook_options(self).enable_property_inspectors
+
+
+# CAPABILITY: initialize_object_graph_node
+func initialize_object_graph_node(graph_node: GraphNode) -> void:
+	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self))
+
+
+# CAPABILITY: create_object_graph_node_slots
+func create_object_graph_node_slots(graph_node: GraphNode) -> Array[Dictionary]:
+	if !is_enabled():
+		return []
+	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots()
+
+
+### CAPABILITY: claim_object_graph_node_member_slots
+func get_object_graph_node_member_slot_bid(object_type: String, object: Object, member_type: String, member_name: StringName) -> float:
+	if !is_enabled():
+		return 0
+	if member_type == MEMBER_TYPE_PROPERTY:
+		return 1
+	return 0
+
+
 func _filter_properties_usable(property: Dictionary) -> bool:
 	if (property.usage & PROPERTY_USAGE_EDITOR) == 0:
 		return false
@@ -123,31 +147,6 @@ func _collect_members(obj: Object, script_getter: StringName, class_getter: Stri
 			list.append(def)
 
 	return list
-
-
-func is_enabled() -> bool:
-	return editor.current_view.get_hook_options(self).enable_property_inspectors
-
-
-# CAPABILITY: initialize_object_graph_node
-func initialize_object_graph_node(graph_node: GraphNode) -> void:
-	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self))
-
-
-# CAPABILITY: create_object_graph_node_slots
-func create_object_graph_node_slots(graph_node: GraphNode) -> Array[Dictionary]:
-	if !is_enabled():
-		return []
-	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots()
-
-
-### CAPABILITY: claim_object_graph_node_member_slots
-func get_object_graph_node_member_slot_bid(object_type: String, object: Object, member_type: String, member_name: StringName) -> float:
-	if !is_enabled():
-		return 0
-	if member_type == MEMBER_TYPE_PROPERTY:
-		return 1
-	return 0
 
 
 class SceneObjectGraphNodeExtension extends RefCounted:

@@ -7,6 +7,15 @@ extends EditorDock
 var plugin: EditorPlugin
 
 
+func _enter_tree() -> void:
+	if is_part_of_edited_scene():
+		return
+	_add_hooks_from_project_settings()
+	%"Reload Button".icon = EditorInterface.get_editor_theme().get_icon(&"Reload", &"EditorIcons")
+	%"Dev Tools Button".get_popup().id_pressed.connect(_on_dev_tool_item_selected)
+	%"Dev Tools".visible = plugin.settings.dev_mode
+
+
 func populate_from_scene() -> void:
 	editor.clear()
 	editor.load(view_manager.active_local_view)
@@ -27,15 +36,6 @@ func get_editor_state() -> Dictionary:
 
 func set_editor_state(editor_state: Dictionary) -> void:
 	view_manager.deserialize_editor_state(editor_state)
-
-
-func _enter_tree() -> void:
-	if is_part_of_edited_scene():
-		return
-	_add_hooks_from_project_settings()
-	%"Reload Button".icon = EditorInterface.get_editor_theme().get_icon(&"Reload", &"EditorIcons")
-	%"Dev Tools Button".get_popup().id_pressed.connect(_on_dev_tool_item_selected)
-	%"Dev Tools".visible = plugin.settings.dev_mode
 
 
 func _add_hooks_from_project_settings() -> void:

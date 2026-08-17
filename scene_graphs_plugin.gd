@@ -6,19 +6,17 @@ signal plugin_disabled()
 signal editor_layout_saving()
 signal editor_layout_loading()
 
-const PLUGIN_ROOT := "res://addons/scene-graphs"
-
 enum PluginMode {
 	MainScreen,
 	EditorDock,
 }
 
-var graph_editor_template: PackedScene = preload(PLUGIN_ROOT + "/scenes/scene_graph_editor.tscn")
-var _dock: EditorDock
+const PLUGIN_ROOT := "res://addons/scene-graphs"
 
+var graph_editor_template: PackedScene = preload(PLUGIN_ROOT + "/scenes/scene_graph_editor.tscn")
 var settings: Settings
 var persistence: Persistence
-
+var _dock: EditorDock
 var _is_this_instance_main_screen: Variant
 
 
@@ -58,6 +56,11 @@ func remove_editor() -> void:
 	_dock = null
 
 
+func reload() -> void:
+	EditorInterface.call_deferred(&"set_plugin_enabled", "scene-graphs", false)
+	EditorInterface.call_deferred(&"set_plugin_enabled", "scene-graphs", true)
+
+
 func _make_visible(visible: bool) -> void:
 	if _has_main_screen():
 		_dock.visible = visible
@@ -77,11 +80,6 @@ func _get_window_layout(configuration: ConfigFile) -> void:
 
 func _set_window_layout(configuration: ConfigFile) -> void:
 	editor_layout_loading.emit()
-
-
-func reload() -> void:
-	EditorInterface.call_deferred(&"set_plugin_enabled", "scene-graphs", false)
-	EditorInterface.call_deferred(&"set_plugin_enabled", "scene-graphs", true)
 
 
 func _enable_plugin() -> void:

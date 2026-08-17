@@ -12,7 +12,6 @@ var member_connection: Dictionary
 var bg_color := Color.BLACK
 var arrow_color := Color.BLACK
 var connection_rotation: float = 0
-
 var mid_point_offset: Vector2 = Vector2(0, 0)
 var dragging_reference_mid_point: Vector2
 var dragging_mid_point_influence: float = 1
@@ -34,6 +33,17 @@ func _init(graph_connection: Dictionary, member_connection: Dictionary, editor: 
 
 	for hook in editor.hooks.initialize_connection_handle:
 		hook.initialize_connection_handle(self)
+
+
+func _draw() -> void:
+	var center := size / 2
+	var drawn := false
+	for hook in editor.hooks.draw_connection_handle:
+		if hook.draw_connection_handle(self, center, connection_rotation, VISUAL_RADIUS):
+			drawn = true
+			break
+	if !drawn:
+		draw_dot_handle(center, connection_rotation, VISUAL_RADIUS)
 
 
 func get_handle_view_data() -> Dictionary:
@@ -92,17 +102,6 @@ func update_view() -> void:
 		return
 	var connection_handle_data := get_or_add_handle_view_data()
 	connection_handle_data["mid_point_offset"] = mid_point_offset
-
-
-func _draw() -> void:
-	var center := size / 2
-	var drawn := false
-	for hook in editor.hooks.draw_connection_handle:
-		if hook.draw_connection_handle(self, center, connection_rotation, VISUAL_RADIUS):
-			drawn = true
-			break
-	if !drawn:
-		draw_dot_handle(center, connection_rotation, VISUAL_RADIUS)
 
 
 func draw_arrow_handle(center: Vector2, rotation: float, size: float) -> void:

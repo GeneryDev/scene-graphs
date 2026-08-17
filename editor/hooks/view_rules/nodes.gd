@@ -2,6 +2,7 @@
 extends RefCounted
 
 const OBJECT_TYPE_NODE := "node"
+const ACTION_ADD_NODES_BY_MEMBER_SOURCE: int = 1000
 
 var editor: SceneGraphEditor
 
@@ -39,6 +40,42 @@ func generate_view_objects(params: Params) -> Array:
 	var objects := []
 	_update_node_views_with_rules(editor.scene_root, params, objects)
 	return objects
+
+
+func create_view_rule_params() -> Object:
+	return Params.new()
+
+
+func get_view_rule_description() -> String:
+	return "Adds graph objects corresponding to each node in the scene, based on certain criteria."
+
+
+### CAPABILITY: populate_popup_menu
+func populate_popup_menu(at_position: Vector2, menu: PopupMenu, actions: Dictionary[int, Callable]) -> void:
+	var hovered_element := editor.get_graph_element_at_position(at_position)
+	if hovered_element != null:
+		return
+
+	menu.add_separator("Graph View")
+	var submenu := PopupMenu.new()
+	menu.add_child(submenu)
+	menu.add_submenu_node_item("Add Nodes by Member Source", submenu)
+
+	for rule_entry in editor.current_view.get_view_rules_of_type("member_source"):
+		var id: String = rule_entry.id
+		var raw_params: Dictionary = rule_entry.get("params")
+		var rule_hook := editor.current_view.get_view_rule_hook(id, "member_source")
+		if !rule_hook:
+			continue
+		var params = editor.current_view.rule_params_from_dict(rule_hook, raw_params)
+		var label = rule_hook.get_view_rule_label(params)
+		submenu.add_item(label)
+		submenu.set_item_metadata(submenu.item_count - 1, rule_entry)
+
+	submenu.add_item("Custom...")
+	submenu.set_item_metadata(submenu.item_count - 1, { })
+
+	submenu.index_pressed.connect(_member_source_submenu_index_pressed.bind(submenu))
 
 
 func _update_node_views_with_rules(node: Node, params: Params, objects: Array) -> bool:
@@ -101,44 +138,6 @@ func _should_include_node(node: Node, params: Params) -> bool:
 			return false
 
 	return true
-
-
-func create_view_rule_params() -> Object:
-	return Params.new()
-
-
-func get_view_rule_description() -> String:
-	return "Adds graph objects corresponding to each node in the scene, based on certain criteria."
-
-### CAPABILITY: populate_popup_menu
-const ACTION_ADD_NODES_BY_MEMBER_SOURCE: int = 1000
-
-
-func populate_popup_menu(at_position: Vector2, menu: PopupMenu, actions: Dictionary[int, Callable]) -> void:
-	var hovered_element := editor.get_graph_element_at_position(at_position)
-	if hovered_element != null:
-		return
-
-	menu.add_separator("Graph View")
-	var submenu := PopupMenu.new()
-	menu.add_child(submenu)
-	menu.add_submenu_node_item("Add Nodes by Member Source", submenu)
-
-	for rule_entry in editor.current_view.get_view_rules_of_type("member_source"):
-		var id: String = rule_entry.id
-		var raw_params: Dictionary = rule_entry.get("params")
-		var rule_hook := editor.current_view.get_view_rule_hook(id, "member_source")
-		if !rule_hook:
-			continue
-		var params = editor.current_view.rule_params_from_dict(rule_hook, raw_params)
-		var label = rule_hook.get_view_rule_label(params)
-		submenu.add_item(label)
-		submenu.set_item_metadata(submenu.item_count - 1, rule_entry)
-
-	submenu.add_item("Custom...")
-	submenu.set_item_metadata(submenu.item_count - 1, { })
-
-	submenu.index_pressed.connect(_member_source_submenu_index_pressed.bind(submenu))
 
 
 func _member_source_submenu_index_pressed(index: int, submenu: PopupMenu) -> void:

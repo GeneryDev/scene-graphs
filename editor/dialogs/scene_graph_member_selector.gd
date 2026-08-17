@@ -7,15 +7,12 @@ enum SelectorMode {
 	MULTIPLE,
 }
 
-var _last_selected_member_type := ""
-
 var all_member_types
 var all_input_member_types
 var all_output_member_types
-
-var _active: ActiveDialog
-
 var editor: SceneGraphEditor
+var _last_selected_member_type := ""
+var _active: ActiveDialog
 
 
 func _init(editor: SceneGraphEditor):
@@ -63,33 +60,6 @@ func get_all_output_member_types() -> Array[String]:
 	return all_output_member_types
 
 
-func _get_tab_info(member_type: String) -> Dictionary:
-	for hook in editor.hooks.configure_member_selector:
-		if hook.get_member_selector_member_types().has(member_type):
-			var tab_info: Dictionary = hook.get_member_selector_tab_info(member_type)
-			if tab_info:
-				return tab_info
-	return { }
-
-
-func _filter_valid_member_types(member_types: Array[String]) -> bool:
-	if !member_types:
-		return false
-	var filtered := member_types.filter(
-		func(member_type: String) -> bool:
-			for hook in editor.hooks.configure_member_selector:
-				if hook.get_member_selector_member_types().has(member_type):
-					return true
-			printerr("No hook is capable of configuring member type '" + member_type + "' for the member selector.")
-			return false
-	)
-	member_types.clear()
-	member_types.append_array(filtered)
-	if !member_types:
-		return false
-	return true
-
-
 func show_single_select(object_type: String, obj: Object, member_types: Array[String], member_callback: Callable) -> void:
 	if !obj:
 		return
@@ -135,6 +105,33 @@ func show_multi_select(object_type: String, obj: Object, member_types: Array[Str
 	_populate_tree("")
 
 	EditorInterface.popup_dialog_centered(_active.dialog)
+
+
+func _get_tab_info(member_type: String) -> Dictionary:
+	for hook in editor.hooks.configure_member_selector:
+		if hook.get_member_selector_member_types().has(member_type):
+			var tab_info: Dictionary = hook.get_member_selector_tab_info(member_type)
+			if tab_info:
+				return tab_info
+	return { }
+
+
+func _filter_valid_member_types(member_types: Array[String]) -> bool:
+	if !member_types:
+		return false
+	var filtered := member_types.filter(
+		func(member_type: String) -> bool:
+			for hook in editor.hooks.configure_member_selector:
+				if hook.get_member_selector_member_types().has(member_type):
+					return true
+			printerr("No hook is capable of configuring member type '" + member_type + "' for the member selector.")
+			return false
+	)
+	member_types.clear()
+	member_types.append_array(filtered)
+	if !member_types:
+		return false
+	return true
 
 
 func _populate_tree(filter: String) -> void:

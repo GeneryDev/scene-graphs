@@ -1,22 +1,20 @@
 @tool
 extends RefCounted
 
-static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
-static var ConnectionHandleElement: Script = preload("res://addons/scene-graphs/editor/elements/connection_handle_element.gd")
-static var SignalConnectionPropertyEdit: Script = preload("res://addons/scene-graphs/editor/inspector/signal_connection_property_edit.gd")
-
 const OBJECT_TYPE_NODE := "node"
-const OBJECT_TYPE_OTHER := "other"
 # temporary placeholder for non-node object types
+const OBJECT_TYPE_OTHER := "other"
 const MEMBER_TYPE_METHOD := "method"
 const MEMBER_TYPE_SIGNAL := "signal"
 const PORT_COLOR_METHOD := Color(0x44ff5eff)
 const PORT_COLOR_SIGNAL := Color(0xff4f35ff)
-
 const ICON_NAME_SIGNAL := "Signal"
 const ICON_NAME_METHOD := "Slot"
-
 const META_NAME_EXTENSION := &"_methods_and_signals_extension"
+
+static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
+static var ConnectionHandleElement: Script = preload("res://addons/scene-graphs/editor/elements/connection_handle_element.gd")
+static var SignalConnectionPropertyEdit: Script = preload("res://addons/scene-graphs/editor/inspector/signal_connection_property_edit.gd")
 
 signal scene_connections_updated()
 
@@ -66,10 +64,6 @@ func get_hook_description() -> String:
 	return "Sets up ports and connections corresponding to methods and signals.\nNote: objects must have method and signal members visible in the view, added either by a Member Source view rule, or manually."
 
 
-func _on_scene_connections_updated() -> void:
-	populate_graph_node_connections()
-
-
 func notify_scene_connections_updated() -> void:
 	scene_connections_updated.emit()
 
@@ -115,9 +109,110 @@ func populate_graph_node_connections() -> void:
 			editor.connect_node(owner_graph_node.name, from_port, graph_node.name, to_port)
 	editor.notify_connections_changed()
 
+
+func method_add_requested(method_info: Dictionary, graph_node: GraphNode) -> void:
+	var method_name := method_info["name"] as StringName
+	editor.current_view.transactions.add_object_view_member(graph_node.object_type, graph_node.get_object(), MEMBER_TYPE_METHOD, method_name)
+
+
+func signal_add_requested(signal_info: Dictionary, graph_node: GraphNode) -> void:
+	var signal_name := signal_info["name"] as StringName
+	editor.current_view.transactions.add_object_view_member(graph_node.object_type, graph_node.get_object(), MEMBER_TYPE_SIGNAL, signal_name)
+
+
+# CAPABILITY: configure_member_selector
+func get_member_selector_member_types() -> Array[String]:
+	return [MEMBER_TYPE_METHOD, MEMBER_TYPE_SIGNAL]
+
+
+func get_member_selector_tab_info(member_type: String) -> Dictionary:
+	match member_type:
+		MEMBER_TYPE_METHOD:
+			return {
+				"label": "Methods",
+				"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_METHOD, &"EditorIcons"),
+				"is_input": true,
+			}
+		MEMBER_TYPE_SIGNAL:
+			return {
+				"label": "Signals",
+				"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_SIGNAL, &"EditorIcons"),
+				"is_output": true,
+			}
+	return { }
+
+
+func get_member_selector_member_list(object_type: String, obj: Object, member_type: String) -> Array[Dictionary]:
+	var members: Array = []
+	match member_type:
+		MEMBER_TYPE_METHOD:
+			members.append_array(_collect_members(obj, &"get_script_method_list", &"class_get_method_list", &"get_method_list"))
+			members = members.map(
+				func(method_info: Dictionary) -> Dictionary:
+					return {
+						"member_type": MEMBER_TYPE_METHOD,
+						"member_name": method_info.name,
+						"label": Utility.get_method_signature_text(method_info),
+						"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_METHOD, &"EditorIcons"),
+					}
+			)
+		MEMBER_TYPE_SIGNAL:
+			members.append_array(_collect_members(obj, &"get_script_signal_list", &"class_get_signal_list", &"get_signal_list"))
+			members = members.map(
+				func(signal_info: Dictionary) -> Dictionary:
+					return {
+						"member_type": MEMBER_TYPE_SIGNAL,
+						"member_name": signal_info.name,
+						"label": Utility.get_method_signature_text(signal_info),
+						"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_SIGNAL, &"EditorIcons"),
+					}
+			)
+
+	return members
+
+
+# CAPABILITY: initialize_object_graph_node
+func initialize_object_graph_node(graph_node: GraphNode) -> void:
+	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self))
+
+
+# CAPABILITY: create_object_graph_node_slots
+func create_object_graph_node_slots(graph_node: GraphNode) -> Array[Dictionary]:
+	if !editor.current_view.get_hook_options(self).enable_method_and_signal_ports:
+		return []
+	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots()
+
+
+# CAPABILITY: create_object_graph_node_slots
+func draw_object_graph_node_port(graph_node: GraphNode, slot_index: int, position: Vector2i, left: bool, color: Color) -> bool:
+	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).draw_port(slot_index, position, left, color)
+
+
+func select_connections(connections: Array) -> void:
+	EditorInterface.get_selection().clear()
+	var edit_resource: Resource = SignalConnectionPropertyEdit.new()
+	edit_resource.setup(editor, connections)
+	EditorInterface.inspect_object(edit_resource)
+
+
+### CAPABILITY: initialize_connection_handle
+func initialize_connection_handle(element: GraphElement) -> void:
+	if element.member_connection.from_member_type == MEMBER_TYPE_SIGNAL && element.member_connection.to_member_type == MEMBER_TYPE_METHOD:
+		element.set_meta(META_NAME_EXTENSION, ConnectionHandleExtension.new(element, editor, self))
+
+
+# CAPABILITY: draw_connection_handle
+func draw_connection_handle(element: GraphElement, center: Vector2, connection_rotation: float, handle_size: float) -> bool:
+	if !element.has_meta(META_NAME_EXTENSION):
+		return false
+	return (element.get_meta(META_NAME_EXTENSION) as ConnectionHandleExtension).draw_connection_handle(center, connection_rotation, handle_size)
+
+
+func _on_scene_connections_updated() -> void:
+	populate_graph_node_connections()
+
+
 ### CONNECTING
-
-
 func _on_connection_request(from_node_name: StringName, from_port: int, to_node_name: StringName, to_port: int) -> void:
 	var from_graph_node := editor.get_node(NodePath(from_node_name))
 	var to_graph_node := editor.get_node(NodePath(to_node_name))
@@ -214,72 +309,11 @@ func _on_disconnection_request(from_node_name: StringName, from_port: int, to_no
 	undo_redo.commit_action()
 
 
-func method_add_requested(method_info: Dictionary, graph_node: GraphNode) -> void:
-	var method_name := method_info["name"] as StringName
-	editor.current_view.transactions.add_object_view_member(graph_node.object_type, graph_node.get_object(), MEMBER_TYPE_METHOD, method_name)
-
-
-func signal_add_requested(signal_info: Dictionary, graph_node: GraphNode) -> void:
-	var signal_name := signal_info["name"] as StringName
-	editor.current_view.transactions.add_object_view_member(graph_node.object_type, graph_node.get_object(), MEMBER_TYPE_SIGNAL, signal_name)
-
-
 func _on_connections_changed() -> void:
 	for child: Node in editor.get_children():
 		if !is_instance_of(child, SceneObjectGraphNode):
 			continue
 		(child.get_meta(META_NAME_EXTENSION, null) as SceneObjectGraphNodeExtension).update_connection_cache()
-
-
-# CAPABILITY: configure_member_selector
-func get_member_selector_member_types() -> Array[String]:
-	return [MEMBER_TYPE_METHOD, MEMBER_TYPE_SIGNAL]
-
-
-func get_member_selector_tab_info(member_type: String) -> Dictionary:
-	match member_type:
-		MEMBER_TYPE_METHOD:
-			return {
-				"label": "Methods",
-				"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_METHOD, &"EditorIcons"),
-				"is_input": true,
-			}
-		MEMBER_TYPE_SIGNAL:
-			return {
-				"label": "Signals",
-				"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_SIGNAL, &"EditorIcons"),
-				"is_output": true,
-			}
-	return { }
-
-
-func get_member_selector_member_list(object_type: String, obj: Object, member_type: String) -> Array[Dictionary]:
-	var members: Array = []
-	match member_type:
-		MEMBER_TYPE_METHOD:
-			members.append_array(_collect_members(obj, &"get_script_method_list", &"class_get_method_list", &"get_method_list"))
-			members = members.map(
-				func(method_info: Dictionary) -> Dictionary:
-					return {
-						"member_type": MEMBER_TYPE_METHOD,
-						"member_name": method_info.name,
-						"label": Utility.get_method_signature_text(method_info),
-						"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_METHOD, &"EditorIcons"),
-					}
-			)
-		MEMBER_TYPE_SIGNAL:
-			members.append_array(_collect_members(obj, &"get_script_signal_list", &"class_get_signal_list", &"get_signal_list"))
-			members = members.map(
-				func(signal_info: Dictionary) -> Dictionary:
-					return {
-						"member_type": MEMBER_TYPE_SIGNAL,
-						"member_name": signal_info.name,
-						"label": Utility.get_method_signature_text(signal_info),
-						"icon": EditorInterface.get_editor_theme().get_icon(ICON_NAME_SIGNAL, &"EditorIcons"),
-					}
-			)
-
-	return members
 
 
 func _collect_members(obj: Object, script_getter: StringName, class_getter: StringName, instance_getter: StringName) -> Array:
@@ -324,21 +358,34 @@ func _collect_members(obj: Object, script_getter: StringName, class_getter: Stri
 	return list
 
 
-# CAPABILITY: initialize_object_graph_node
-func initialize_object_graph_node(graph_node: GraphNode) -> void:
-	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self))
+### CONNECTION SELECTION
+func _on_selection_changed_with_script(script: Script, nodes: Array[Node]) -> void:
+	if script == ConnectionHandleElement && nodes.all(_filter_handle_has_extension):
+		select_connections(
+			nodes.map(_map_handle_to_graph_connection)
+			.filter(_filter_valid_graph_connections),
+		)
+	else:
+		_stop_editing_connection_properties()
 
 
-# CAPABILITY: create_object_graph_node_slots
-func create_object_graph_node_slots(graph_node: GraphNode) -> Array[Dictionary]:
-	if !editor.current_view.get_hook_options(self).enable_method_and_signal_ports:
-		return []
-	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots()
+func _filter_handle_has_extension(n: Node) -> bool:
+	return n.has_meta(META_NAME_EXTENSION)
 
 
-# CAPABILITY: create_object_graph_node_slots
-func draw_object_graph_node_port(graph_node: GraphNode, slot_index: int, position: Vector2i, left: bool, color: Color) -> bool:
-	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).draw_port(slot_index, position, left, color)
+func _map_handle_to_graph_connection(handle: Node) -> Dictionary:
+	return handle.graph_connection
+
+
+func _filter_valid_graph_connections(c: Dictionary) -> bool:
+	var from_graph_node := editor.get_node_or_null(NodePath(c.from_node))
+	var to_graph_node := editor.get_node_or_null(NodePath(c.to_node))
+	return from_graph_node != null && to_graph_node != null
+
+
+func _stop_editing_connection_properties() -> void:
+	if is_instance_of(EditorInterface.get_inspector().get_edited_object(), SignalConnectionPropertyEdit):
+		EditorInterface.get_inspector().edit(null)
 
 
 class Utility extends RefCounted:
@@ -700,57 +747,6 @@ class EqualDistributionHBoxContainer extends Container:
 		match what:
 			NOTIFICATION_SORT_CHILDREN:
 				_sort_children()
-
-### CONNECTION SELECTION
-
-
-func _on_selection_changed_with_script(script: Script, nodes: Array[Node]) -> void:
-	if script == ConnectionHandleElement && nodes.all(_filter_handle_has_extension):
-		select_connections(
-			nodes.map(_map_handle_to_graph_connection)
-			.filter(_filter_valid_graph_connections),
-		)
-	else:
-		_stop_editing_connection_properties()
-
-
-func _filter_handle_has_extension(n: Node) -> bool:
-	return n.has_meta(META_NAME_EXTENSION)
-
-
-func _map_handle_to_graph_connection(handle: Node) -> Dictionary:
-	return handle.graph_connection
-
-
-func _filter_valid_graph_connections(c: Dictionary) -> bool:
-	var from_graph_node := editor.get_node_or_null(NodePath(c.from_node))
-	var to_graph_node := editor.get_node_or_null(NodePath(c.to_node))
-	return from_graph_node != null && to_graph_node != null
-
-
-func select_connections(connections: Array) -> void:
-	EditorInterface.get_selection().clear()
-	var edit_resource: Resource = SignalConnectionPropertyEdit.new()
-	edit_resource.setup(editor, connections)
-	EditorInterface.inspect_object(edit_resource)
-
-
-func _stop_editing_connection_properties() -> void:
-	if is_instance_of(EditorInterface.get_inspector().get_edited_object(), SignalConnectionPropertyEdit):
-		EditorInterface.get_inspector().edit(null)
-
-
-### CAPABILITY: initialize_connection_handle
-func initialize_connection_handle(element: GraphElement) -> void:
-	if element.member_connection.from_member_type == MEMBER_TYPE_SIGNAL && element.member_connection.to_member_type == MEMBER_TYPE_METHOD:
-		element.set_meta(META_NAME_EXTENSION, ConnectionHandleExtension.new(element, editor, self))
-
-
-# CAPABILITY: draw_connection_handle
-func draw_connection_handle(element: GraphElement, center: Vector2, connection_rotation: float, handle_size: float) -> bool:
-	if !element.has_meta(META_NAME_EXTENSION):
-		return false
-	return (element.get_meta(META_NAME_EXTENSION) as ConnectionHandleExtension).draw_connection_handle(center, connection_rotation, handle_size)
 
 
 class ConnectionHandleExtension extends RefCounted:

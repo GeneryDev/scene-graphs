@@ -7,6 +7,41 @@ const MEMBER_TYPE_SIGNAL := "signal"
 var editor: SceneGraphEditor
 
 
+static func get_connected_method_names(obj: Object) -> Array:
+	var connected_methods: Array = []
+	for connection in obj.get_incoming_connections():
+		if (connection.flags & CONNECT_PERSIST) == 0:
+			continue
+		var method_name := connection.callable.get_method() as StringName
+		if !connected_methods.has(method_name):
+			connected_methods.append(method_name)
+
+	# TODO I'd like the returned methods to be in a consistent order, preferably in the order returned by get_method_list.
+	# However, that method appears to be super expensive, so I'd rather not use it in this function.
+
+	return connected_methods
+
+
+static func get_connected_signal_names(obj: Object) -> Array:
+	var list := []
+	for signal_info in obj.get_signal_list():
+		var signal_name := signal_info["name"] as StringName
+		var used := false
+
+		for connection in obj.get_signal_connection_list(signal_name):
+			var flags := connection["flags"] as ConnectFlags
+			if (flags & ConnectFlags.CONNECT_PERSIST) != 0:
+				used = true
+				break
+
+		if !used:
+			continue
+
+		list.append(signal_name)
+
+	return list
+
+
 func _init(editor: SceneGraphEditor):
 	self.editor = editor
 
@@ -49,38 +84,3 @@ func generate_view_object_members(object_type: String, obj: Object, params: Vari
 		)
 
 	return members
-
-
-static func get_connected_method_names(obj: Object) -> Array:
-	var connected_methods: Array = []
-	for connection in obj.get_incoming_connections():
-		if (connection.flags & CONNECT_PERSIST) == 0:
-			continue
-		var method_name := connection.callable.get_method() as StringName
-		if !connected_methods.has(method_name):
-			connected_methods.append(method_name)
-
-	# TODO I'd like the returned methods to be in a consistent order, preferably in the order returned by get_method_list.
-	# However, that method appears to be super expensive, so I'd rather not use it in this function.
-
-	return connected_methods
-
-
-static func get_connected_signal_names(obj: Object) -> Array:
-	var list := []
-	for signal_info in obj.get_signal_list():
-		var signal_name := signal_info["name"] as StringName
-		var used := false
-
-		for connection in obj.get_signal_connection_list(signal_name):
-			var flags := connection["flags"] as ConnectFlags
-			if (flags & ConnectFlags.CONNECT_PERSIST) != 0:
-				used = true
-				break
-
-		if !used:
-			continue
-
-		list.append(signal_name)
-
-	return list

@@ -36,17 +36,6 @@ func setup(view_rule_type: String, hooks: Array[Object], selected_hook: Object, 
 	setup_inspector()
 
 
-func _on_item_selected(index: int) -> void:
-	print("item selected " + str(index))
-	var dropdown: OptionButton = %"Rule Dropdown"
-	var hook := _hooks[dropdown.selected]
-	if hook.has_method(&"create_view_rule_params"):
-		_editing_params = hook.create_view_rule_params()
-	else:
-		_editing_params = null
-	setup_inspector()
-
-
 func setup_inspector() -> void:
 	var property_container: Container = %"Property Editors"
 	for child in property_container.get_children():
@@ -94,6 +83,17 @@ func setup_inspector() -> void:
 		none_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		none_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		property_container.add_child(none_label)
+
+
+func _on_item_selected(index: int) -> void:
+	print("item selected " + str(index))
+	var dropdown: OptionButton = %"Rule Dropdown"
+	var hook := _hooks[dropdown.selected]
+	if hook.has_method(&"create_view_rule_params"):
+		_editing_params = hook.create_view_rule_params()
+	else:
+		_editing_params = null
+	setup_inspector()
 
 
 func _on_property_changed(property: StringName, value: Variant, field: StringName, changing: bool) -> void:

@@ -13,12 +13,10 @@ var scene_root: Node:
 		return EditorInterface.get_edited_scene_root()
 var selected_nodes: Array[StringName] = []
 var dragging: bool = false
-
 var interface_signals: InterfaceSignals
 var member_selector: SceneGraphMemberSelector
 var arranger: Arranger
 var hooks: Hooks
-
 var current_view: SceneGraphView:
 	get:
 		return current_view
@@ -28,14 +26,13 @@ var current_view: SceneGraphView:
 		current_view = value
 		if current_view:
 			current_view.view_updated.connect(_on_current_view_updated)
-
 var connections_layer: Control
-
 var _port_types_by_name: Dictionary[StringName, int] = {
 	&"": -1,
 }
 var _next_port_type_idx := 0
 var _pending_initial_draw := false
+var _selection_change_queued := false
 
 
 func _init():
@@ -46,9 +43,8 @@ func _init():
 	connections_layer = get_node(^"_connection_layer")
 	hooks = Hooks.new(self)
 
+
 ### CORE
-
-
 func _ready() -> void:
 	if is_part_of_edited_scene():
 		return
@@ -56,6 +52,18 @@ func _ready() -> void:
 	interface_signals.connect_all()
 	for hook in hooks.configure_port_types:
 		hook.configure_port_types()
+
+
+func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
+	for hook in hooks.drag_and_drop:
+		if hook.can_drop_data(at_position, data):
+			return true
+	return false
+
+
+func _drop_data(at_position: Vector2, data: Variant) -> void:
+	for hook in hooks.drag_and_drop:
+		hook.drop_data(at_position, data)
 
 
 func clear():
@@ -91,34 +99,6 @@ func load(view: SceneGraphView) -> void:
 		_pending_initial_draw = true
 
 
-func _update_nav_from_view() -> void:
-	if !current_view:
-		return
-	if current_view.scene_data.has("zoom"):
-		zoom = current_view.scene_data.zoom
-	if current_view.scene_data.has("scroll_offset"):
-		scroll_offset = current_view.scene_data.scroll_offset
-
-
-func _update_nav_view() -> void:
-	if !current_view:
-		return
-	if _pending_initial_draw:
-		return
-	current_view.scene_data.scroll_offset = scroll_offset
-	current_view.scene_data.zoom = zoom
-
-
-func _on_current_view_updated():
-	for hook in hooks.populate_graph_nodes_from_view:
-		hook.populate_graph_nodes_from_view()
-	for hook in hooks.populate_graph_node_connections:
-		hook.populate_graph_node_connections()
-	view_updated.emit()
-	if is_visible_in_tree():
-		arranger.flush_arrange()
-
-
 func rearrange_after_load():
 	_pending_initial_draw = false
 	arranger.flush_arrange()
@@ -145,9 +125,6 @@ func register_port_type(name: StringName) -> int:
 	_next_port_type_idx += 1
 	_port_types_by_name[name] = idx
 	return idx
-
-
-var _selection_change_queued := false
 
 
 func notify_selection_changed(throttled: bool = true) -> void:
@@ -196,26 +173,6 @@ func connect_node_and_notify(from_node: StringName, from_port: int, to_node: Str
 func disconnect_node_and_notify(from_node: StringName, from_port: int, to_node: StringName, to_port: int) -> void:
 	disconnect_node(from_node, from_port, to_node, to_port)
 	notify_connections_changed()
-
-
-func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
-	for hook in hooks.drag_and_drop:
-		if hook.can_drop_data(at_position, data):
-			return true
-	return false
-
-
-func _drop_data(at_position: Vector2, data: Variant) -> void:
-	for hook in hooks.drag_and_drop:
-		hook.drop_data(at_position, data)
-
-
-func _get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
-	for hook in hooks.override_connection_lines:
-		var override = hook.get_connection_line(from_position, to_position)
-		if override:
-			return override
-	return get_default_connection_line(from_position, to_position)
 
 
 func get_default_connection_line(from_position: Vector2, to_position: Vector2, curvature: float = -1) -> PackedVector2Array:
@@ -280,9 +237,59 @@ func check_connection_port_types(connection: Dictionary, from_port_type: int, to
 
 	return true
 
+
+func get_graph_element_at_position(at_position: Vector2) -> GraphElement:
+	var children := get_children()
+	for i in range(children.size() - 1, -1, -1):
+		var child := children[i]
+		if child is not GraphElement:
+			continue
+		var element: GraphElement = child
+		if !element.is_visible_in_tree():
+			continue
+		var graph_node_rect := Rect2(element.position, element.size * zoom)
+		if graph_node_rect.has_point(at_position):
+			return element
+	return null
+
+
+func _update_nav_from_view() -> void:
+	if !current_view:
+		return
+	if current_view.scene_data.has("zoom"):
+		zoom = current_view.scene_data.zoom
+	if current_view.scene_data.has("scroll_offset"):
+		scroll_offset = current_view.scene_data.scroll_offset
+
+
+func _update_nav_view() -> void:
+	if !current_view:
+		return
+	if _pending_initial_draw:
+		return
+	current_view.scene_data.scroll_offset = scroll_offset
+	current_view.scene_data.zoom = zoom
+
+
+func _on_current_view_updated():
+	for hook in hooks.populate_graph_nodes_from_view:
+		hook.populate_graph_nodes_from_view()
+	for hook in hooks.populate_graph_node_connections:
+		hook.populate_graph_node_connections()
+	view_updated.emit()
+	if is_visible_in_tree():
+		arranger.flush_arrange()
+
+
+func _get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
+	for hook in hooks.override_connection_lines:
+		var override = hook.get_connection_line(from_position, to_position)
+		if override:
+			return override
+	return get_default_connection_line(from_position, to_position)
+
+
 ### HOOKS
-
-
 class Hooks extends RefCounted:
 	const METHOD_NAME_GET_CAPABILITIES: StringName = &"get_scene_graph_capabilities"
 	const META_NAME_GRANTED_CAPABILITIES: StringName = &"_scene_graph_granted_capabilities"
@@ -560,23 +567,7 @@ class Utility extends RefCounted:
 		return null
 
 
-func get_graph_element_at_position(at_position: Vector2) -> GraphElement:
-	var children := get_children()
-	for i in range(children.size() - 1, -1, -1):
-		var child := children[i]
-		if child is not GraphElement:
-			continue
-		var element: GraphElement = child
-		if !element.is_visible_in_tree():
-			continue
-		var graph_node_rect := Rect2(element.position, element.size * zoom)
-		if graph_node_rect.has_point(at_position):
-			return element
-	return null
-
 ### INTERFACE SIGNALS
-
-
 class InterfaceSignals extends RefCounted:
 	var editor: SceneGraphEditor
 
@@ -665,9 +656,8 @@ class InterfaceSignals extends RefCounted:
 	func _on_scroll_offset_changed(offset: Vector2) -> void:
 		editor._update_nav_view()
 
+
 ### Arranger
-
-
 class Arranger extends RefCounted:
 	var editor: SceneGraphEditor
 

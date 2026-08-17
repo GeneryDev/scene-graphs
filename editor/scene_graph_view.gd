@@ -5,19 +5,16 @@ signal view_updated()
 
 var editor: SceneGraphEditor
 var transactions: Transactions
-
 var view_rules: Dictionary = { }
 var hook_options: Dictionary = { }
 var scene_data: Dictionary = { }
 var scene_objects: Dictionary = { }
+var _update_signal_queued := false
 
 
 func _init(editor: SceneGraphEditor):
 	self.editor = editor
 	transactions = Transactions.new(editor, self)
-
-
-var _update_signal_queued := false
 
 
 func notify_view_updated(throttled: bool = true) -> void:
@@ -174,10 +171,6 @@ func clear_objects(object_type: String) -> void:
 	scene_objects[object_type] = { }
 
 
-func _print_unsupported_object_type(object_type: String) -> void:
-	printerr("Graph view object type '" + object_type + "' is not supported by any of the active scene graph editor hooks. Some data may be lost.")
-
-
 func view_object_to_object_key(object_type: String, obj: Object) -> Variant:
 	if !obj:
 		return null
@@ -232,16 +225,6 @@ func instantiate_graph_node_for_object(object_type: String, obj: Object, graph_n
 	var graph_node: GraphNode = graph_node_script.new(object_type, obj, editor)
 	graph_node.name = _object_to_graph_node_name(object_type, obj)
 	return graph_node
-
-
-func _object_to_graph_node_name(object_type: String, obj: Object) -> StringName:
-	if !obj:
-		return &""
-	var object_key = view_object_to_object_key(object_type, obj)
-	if !object_key:
-		return &""
-	var node_name := StringName(object_type + "_" + str(object_key))
-	return node_name
 
 
 func get_graph_node_for_object(object_type: String, obj: Object) -> GraphNode:
@@ -529,6 +512,20 @@ func copy_non_scene_data_from(other: SceneGraphView, duplicate_deep: bool = fals
 func clear_scene_data() -> void:
 	scene_data.clear()
 	scene_objects.clear()
+
+
+func _print_unsupported_object_type(object_type: String) -> void:
+	printerr("Graph view object type '" + object_type + "' is not supported by any of the active scene graph editor hooks. Some data may be lost.")
+
+
+func _object_to_graph_node_name(object_type: String, obj: Object) -> StringName:
+	if !obj:
+		return &""
+	var object_key = view_object_to_object_key(object_type, obj)
+	if !object_key:
+		return &""
+	var node_name := StringName(object_type + "_" + str(object_key))
+	return node_name
 
 
 class Transactions extends RefCounted:

@@ -1,14 +1,13 @@
 @tool
 extends RefCounted
 
-static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
-
 const OBJECT_TYPE_NODE := "node"
 const MEMBER_TYPE_PROPERTY := "property"
 const MEMBER_TYPE_NODE_REFERENCE_OUT := "node_reference_out"
 const PORT_COLOR_NODE_REFERENCE := Color(0x0067ffff)
-
 const META_NAME_EXTENSION := &"_node_references_extension"
+
+static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
 
 signal scene_connections_updated()
 
@@ -52,10 +51,6 @@ func create_hook_options() -> Options:
 
 func get_hook_description() -> String:
 	return "Sets up ports and connections corresponding to Node or NodePath properties.\nNote: objects must have property members visible in the view, added either by a Member Source view rule, or manually."
-
-
-func _on_scene_connections_updated() -> void:
-	populate_graph_node_connections()
 
 
 func notify_scene_connections_updated() -> void:
@@ -108,13 +103,46 @@ func populate_graph_node_connections() -> void:
 			editor.connect_node(referenced_graph_node.name, from_port, graph_node.name, to_port)
 	editor.notify_connections_changed()
 
+
 ### INTERFACE SIGNALS
-
-
 func connect_interface_signals() -> void:
 	editor.connection_request.connect(_on_connection_request)
 	editor.disconnection_request.connect(_on_disconnection_request)
 	editor.connections_changed.connect(_on_connections_changed)
+
+
+func is_enabled() -> bool:
+	return editor.current_view.get_hook_options(self).enable_node_reference_ports
+
+
+# CAPABILITY: initialize_object_graph_node
+func initialize_object_graph_node(graph_node: GraphNode) -> void:
+	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self))
+
+
+# CAPABILITY: create_object_graph_node_slots
+func create_object_graph_node_slots(graph_node: GraphNode) -> Array[Dictionary]:
+	if !is_enabled():
+		return []
+	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots()
+
+
+# CAPABILITY: create_object_graph_node_slots
+func draw_object_graph_node_port(graph_node: GraphNode, slot_index: int, position: Vector2i, left: bool, color: Color) -> bool:
+	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).draw_port(slot_index, position, left, color)
+
+
+### CAPABILITY: claim_object_graph_node_member_slots
+func get_object_graph_node_member_slot_bid(object_type: String, object: Object, member_type: String, member_name: StringName) -> float:
+	if !is_enabled():
+		return 0
+	if member_type == MEMBER_TYPE_PROPERTY && Utility.is_property_node_reference(Utility.get_property_info_by_name(object, member_name)):
+		return 2
+	return 0
+
+
+func _on_scene_connections_updated() -> void:
+	populate_graph_node_connections()
 
 
 func _on_connection_request(from_node_name: StringName, from_port: int, to_node_name: StringName, to_port: int) -> void:
@@ -217,36 +245,6 @@ func _on_disconnection_request(from_node_name: StringName, from_port: int, to_no
 
 func _on_connections_changed() -> void:
 	pass
-
-
-func is_enabled() -> bool:
-	return editor.current_view.get_hook_options(self).enable_node_reference_ports
-
-
-# CAPABILITY: initialize_object_graph_node
-func initialize_object_graph_node(graph_node: GraphNode) -> void:
-	graph_node.set_meta(META_NAME_EXTENSION, SceneObjectGraphNodeExtension.new(graph_node, editor, self))
-
-
-# CAPABILITY: create_object_graph_node_slots
-func create_object_graph_node_slots(graph_node: GraphNode) -> Array[Dictionary]:
-	if !is_enabled():
-		return []
-	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).create_object_graph_node_slots()
-
-
-# CAPABILITY: create_object_graph_node_slots
-func draw_object_graph_node_port(graph_node: GraphNode, slot_index: int, position: Vector2i, left: bool, color: Color) -> bool:
-	return (graph_node.get_meta(META_NAME_EXTENSION) as SceneObjectGraphNodeExtension).draw_port(slot_index, position, left, color)
-
-
-### CAPABILITY: claim_object_graph_node_member_slots
-func get_object_graph_node_member_slot_bid(object_type: String, object: Object, member_type: String, member_name: StringName) -> float:
-	if !is_enabled():
-		return 0
-	if member_type == MEMBER_TYPE_PROPERTY && Utility.is_property_node_reference(Utility.get_property_info_by_name(object, member_name)):
-		return 2
-	return 0
 
 
 class Utility extends RefCounted:

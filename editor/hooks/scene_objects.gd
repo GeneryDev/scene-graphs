@@ -1,13 +1,18 @@
 @tool
 extends RefCounted
 
+const OBJECT_TYPE_NODE := "node"
+const META_NAME_EXTENSION := &"_scene_objects_extension"
+const ACTION_MANAGE_MEMBERS: int = 200
+const ACTION_MEMBER_REMOVE: int = 210
+
 static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
 
-const OBJECT_TYPE_NODE := "node"
-
-const META_NAME_EXTENSION := &"_scene_objects_extension"
-
 var editor: SceneGraphEditor
+var _connection_dragging_wildcard := false
+var _connection_dragging_wildcard_type := 0
+var _connection_dragging_wildcard_graph_node: GraphNode = null
+var _connection_dragging_wildcard_cursor_pos := Vector2.ZERO
 
 
 func _init(editor: SceneGraphEditor):
@@ -75,9 +80,8 @@ func object_key_deserialize(object_type: String, serialized: Variant) -> Variant
 		return null
 	return node.get_instance_id()
 
+
 ### CAPABILITY: populate_graph_nodes_from_view
-
-
 func populate_graph_nodes_from_view() -> void:
 	var scene_object_views := editor.current_view.get_scene_object_views(OBJECT_TYPE_NODE)
 	for object_key in scene_object_views:
@@ -106,11 +110,6 @@ func populate_graph_nodes_from_view() -> void:
 			child.queue_free()
 
 
-func _disconnect_all_for_node(name: StringName) -> void:
-	for connection in editor.get_connection_list_from_node(name):
-		editor.disconnect_node(connection.from_node, connection.from_port, connection.to_node, connection.to_port)
-
-
 ### CAPABILITY: drag_and_drop
 func can_drop_data(at_position: Vector2, data: Variant) -> bool:
 	var data_dict: Dictionary = data
@@ -132,28 +131,6 @@ func drop_data(at_position: Vector2, data: Variant) -> void:
 			continue
 		editor.current_view.transactions.add_object_view(OBJECT_TYPE_NODE, node, editor.local_to_graph_position(at_position))
 
-### DELETING
-
-
-func _on_delete_nodes_request(graph_nodes: Array[StringName]) -> void:
-	for graph_node_name: StringName in graph_nodes:
-		var graph_node := editor.get_node_or_null(NodePath(graph_node_name))
-		if !is_instance_of(graph_node, SceneObjectGraphNode):
-			continue
-		var obj: Object = graph_node.get_object()
-		editor.current_view.transactions.remove_object_view(OBJECT_TYPE_NODE, obj)
-
-### SELECTION
-
-
-func _on_selection_changed_with_script(script: Script, nodes: Array[Node]) -> void:
-	if script == SceneObjectGraphNode:
-		select_nodes(nodes.map(_map_graph_node_to_object))
-
-
-func _map_graph_node_to_object(graph_node: GraphNode) -> Object:
-	return graph_node.get_object()
-
 
 func select_nodes(nodes: Array) -> void:
 	EditorInterface.get_selection().clear()
@@ -165,10 +142,52 @@ func select_nodes(nodes: Array) -> void:
 		EditorInterface.get_selection().add_node(node)
 
 
-var _connection_dragging_wildcard := false
-var _connection_dragging_wildcard_type := 0
-var _connection_dragging_wildcard_graph_node: GraphNode = null
-var _connection_dragging_wildcard_cursor_pos := Vector2.ZERO
+### CAPABILITY: populate_popup_menu
+func populate_popup_menu(at_position: Vector2, menu: PopupMenu, actions: Dictionary[int, Callable]) -> void:
+	var hovered_element := editor.get_graph_element_at_position(at_position)
+	if !is_instance_of(hovered_element, SceneObjectGraphNode):
+		return
+	var graph_node: GraphNode = hovered_element
+
+	menu.add_separator("Scene Object")
+	menu.add_icon_item(EditorInterface.get_editor_theme().get_icon(&"Edit", &"EditorIcons"), "Manage Members", ACTION_MANAGE_MEMBERS)
+	actions[ACTION_MANAGE_MEMBERS] = _action_manage_members.bind(graph_node)
+	menu.add_separator("Object Members")
+	for member_type in graph_node._member_cache:
+		for member_name in graph_node._member_cache[member_type]:
+			var member: Dictionary = graph_node._member_cache[member_type][member_name]
+			var submenu_label: String = member_type.capitalize() + " " + member_name
+			var submenu := PopupMenu.new()
+			menu.add_child(submenu)
+			menu.add_submenu_node_item(submenu_label, submenu)
+
+			submenu.add_item("Remove Member from View", ACTION_MEMBER_REMOVE)
+			submenu.id_pressed.connect(_member_submenu_id_pressed.bind(member))
+
+
+func _disconnect_all_for_node(name: StringName) -> void:
+	for connection in editor.get_connection_list_from_node(name):
+		editor.disconnect_node(connection.from_node, connection.from_port, connection.to_node, connection.to_port)
+
+
+### DELETING
+func _on_delete_nodes_request(graph_nodes: Array[StringName]) -> void:
+	for graph_node_name: StringName in graph_nodes:
+		var graph_node := editor.get_node_or_null(NodePath(graph_node_name))
+		if !is_instance_of(graph_node, SceneObjectGraphNode):
+			continue
+		var obj: Object = graph_node.get_object()
+		editor.current_view.transactions.remove_object_view(OBJECT_TYPE_NODE, obj)
+
+
+### SELECTION
+func _on_selection_changed_with_script(script: Script, nodes: Array[Node]) -> void:
+	if script == SceneObjectGraphNode:
+		select_nodes(nodes.map(_map_graph_node_to_object))
+
+
+func _map_graph_node_to_object(graph_node: GraphNode) -> Object:
+	return graph_node.get_object()
 
 
 func _on_connection_drag_started(from_node_name: StringName, from_port: int, is_output: bool) -> void:
@@ -202,32 +221,6 @@ func _on_connection_drag_ended() -> void:
 				editor.member_selector.get_all_input_member_types() if _connection_dragging_wildcard_type == editor.port_type(&"wildcard_in") else editor.member_selector.get_all_output_member_types(),
 				editor.current_view.transactions.add_object_view_member,
 			)
-
-### CAPABILITY: populate_popup_menu
-const ACTION_MANAGE_MEMBERS: int = 200
-const ACTION_MEMBER_REMOVE: int = 210
-
-
-func populate_popup_menu(at_position: Vector2, menu: PopupMenu, actions: Dictionary[int, Callable]) -> void:
-	var hovered_element := editor.get_graph_element_at_position(at_position)
-	if !is_instance_of(hovered_element, SceneObjectGraphNode):
-		return
-	var graph_node: GraphNode = hovered_element
-
-	menu.add_separator("Scene Object")
-	menu.add_icon_item(EditorInterface.get_editor_theme().get_icon(&"Edit", &"EditorIcons"), "Manage Members", ACTION_MANAGE_MEMBERS)
-	actions[ACTION_MANAGE_MEMBERS] = _action_manage_members.bind(graph_node)
-	menu.add_separator("Object Members")
-	for member_type in graph_node._member_cache:
-		for member_name in graph_node._member_cache[member_type]:
-			var member: Dictionary = graph_node._member_cache[member_type][member_name]
-			var submenu_label: String = member_type.capitalize() + " " + member_name
-			var submenu := PopupMenu.new()
-			menu.add_child(submenu)
-			menu.add_submenu_node_item(submenu_label, submenu)
-
-			submenu.add_item("Remove Member from View", ACTION_MEMBER_REMOVE)
-			submenu.id_pressed.connect(_member_submenu_id_pressed.bind(member))
 
 
 func _action_manage_members(graph_node: GraphNode) -> void:

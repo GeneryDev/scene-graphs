@@ -4,15 +4,12 @@ const PORT_COLOR_WILDCARD := Color(0xe0e0e0ff)
 
 var object_type: String
 var obj: Object
-
 var editor: SceneGraphEditor
-var _member_cache: Dictionary = { }
 var user_size: Vector2
-
+var _member_cache: Dictionary = { }
 var _last_built_view: Dictionary = { }
 var _building_from_view := false
 var _custom_titlebar: Control
-
 var _custom_titlebar_stylebox: StyleBox
 var _custom_titlebar_selected_stylebox: StyleBox
 var _custom_titlebar_wildcard_port_icon: Texture2D
@@ -135,6 +132,122 @@ func claim_object_graph_node_member_slot(hook: Object, member_type: String, memb
 	return matching_bid == highest_bid
 
 
+func create_and_add_contents() -> void:
+	if _custom_titlebar != null:
+		_set_custom_titlebar_slot()
+
+	var slots_to_add: Array[Dictionary] = []
+	for hook in editor.hooks.create_object_graph_node_slots:
+		var slots_from_hook: Array[Dictionary] = hook.create_object_graph_node_slots(self)
+		for slot in slots_from_hook:
+			var sort_key: int = slot.get("sort_key", 0)
+			var insertion_index: int
+			# insert into slots_to_add already sorted
+			if slots_to_add.is_empty():
+				insertion_index = 0
+			elif slots_to_add[slots_to_add.size() - 1].get("sort_key", 0) <= sort_key:
+				insertion_index = slots_to_add.size()
+			elif slots_to_add[0].get("sort_key", 0) > sort_key:
+				insertion_index = 0
+			else:
+				insertion_index = slots_to_add.rfind_custom(
+					func(s: Dictionary) -> bool:
+						return s.get("sort_key", 0) <= sort_key
+				) + 1
+			slots_to_add.insert(insertion_index, slot)
+
+	var left_port_index := 0
+	var right_port_index := 0
+	if _custom_titlebar != null:
+		left_port_index += 1
+		right_port_index += 1
+
+	for slot in slots_to_add:
+		var slot_index := get_child_count()
+		var control: Control = slot.control
+		var left_port: Dictionary = slot.get("left_port", { })
+		var right_port: Dictionary = slot.get("right_port", { })
+		add_child(control)
+		set_slot(
+			slot_index,
+			!left_port.is_empty(),
+			left_port.get("port_type", -1),
+			left_port.get("port_color", Color.WHITE),
+			!right_port.is_empty(),
+			right_port.get("port_type", -1),
+			right_port.get("port_color", Color.WHITE),
+		)
+		if slot.has("member"):
+			_add_member_to_cache(slot.member.member_type, slot.member.member_name, slot_index, -1, "none")
+		if left_port:
+			set_slot_metadata_left(slot_index, left_port)
+			if left_port.has("member"):
+				_add_member_to_cache(left_port.member.member_type, left_port.member.member_name, slot_index, left_port_index, "left")
+			left_port_index += 1
+		if right_port:
+			set_slot_metadata_right(slot_index, right_port)
+			if right_port.has("member"):
+				_add_member_to_cache(right_port.member.member_type, right_port.member.member_name, slot_index, right_port_index, "right")
+			right_port_index += 1
+
+
+func manage_members() -> void:
+	editor.member_selector.show_multi_select(
+		object_type,
+		get_object(),
+		editor.member_selector.get_all_member_types(),
+		get_object_view().get("members"),
+		editor.current_view.transactions.override_object_view_members,
+	)
+
+
+func get_member_port_id(member_type: String, member_name: StringName) -> int:
+	return _get_member_cache(member_type, member_name).get("port_id", -1)
+
+
+func get_member_slot_id(member_type: String, member_name: StringName) -> int:
+	return _get_member_cache(member_type, member_name).get("slot_id", -1)
+
+
+func get_member_from_port_id_and_type(port_id: int, member_type: String) -> Dictionary:
+	if !_member_cache.has(member_type):
+		return { }
+	for member_name in _member_cache[member_type]:
+		var member: Dictionary = _member_cache[member_type][member_name]
+		if member["port_id"] == port_id:
+			return member
+	return { }
+
+
+func get_member_from_port_id_and_side(port_id: int, side: String) -> Dictionary:
+	for entry_member_type in _member_cache:
+		for member_name in _member_cache[entry_member_type]:
+			var member: Dictionary = _member_cache[entry_member_type][member_name]
+			if member["port_id"] == port_id && member["port_side"] == side:
+				return member
+	return { }
+
+
+func get_member_from_slot_id(slot_id: int, member_type: String) -> Dictionary:
+	if !_member_cache.has(member_type):
+		return { }
+	for member_name in _member_cache[member_type]:
+		var member: Dictionary = _member_cache[member_type][member_name]
+		if member["slot_id"] == slot_id:
+			return member
+	return { }
+
+
+func get_members_from_slot_id(slot_id: int) -> Array:
+	var output := []
+	for member_type in _member_cache:
+		for member_name in _member_cache[member_type]:
+			var member: Dictionary = _member_cache[member_type][member_name]
+			if member["slot_id"] == slot_id:
+				output.append(member)
+	return output
+
+
 func _build_custom_titlebar() -> void:
 	var obj: Object = get_object()
 
@@ -215,75 +328,6 @@ func _set_custom_titlebar_slot() -> void:
 	)
 
 
-func create_and_add_contents() -> void:
-	if _custom_titlebar != null:
-		_set_custom_titlebar_slot()
-
-	var slots_to_add: Array[Dictionary] = []
-	for hook in editor.hooks.create_object_graph_node_slots:
-		var slots_from_hook: Array[Dictionary] = hook.create_object_graph_node_slots(self)
-		for slot in slots_from_hook:
-			var sort_key: int = slot.get("sort_key", 0)
-			var insertion_index: int
-			# insert into slots_to_add already sorted
-			if slots_to_add.is_empty():
-				insertion_index = 0
-			elif slots_to_add[slots_to_add.size() - 1].get("sort_key", 0) <= sort_key:
-				insertion_index = slots_to_add.size()
-			elif slots_to_add[0].get("sort_key", 0) > sort_key:
-				insertion_index = 0
-			else:
-				insertion_index = slots_to_add.rfind_custom(
-					func(s: Dictionary) -> bool:
-						return s.get("sort_key", 0) <= sort_key
-				) + 1
-			slots_to_add.insert(insertion_index, slot)
-
-	var left_port_index := 0
-	var right_port_index := 0
-	if _custom_titlebar != null:
-		left_port_index += 1
-		right_port_index += 1
-
-	for slot in slots_to_add:
-		var slot_index := get_child_count()
-		var control: Control = slot.control
-		var left_port: Dictionary = slot.get("left_port", { })
-		var right_port: Dictionary = slot.get("right_port", { })
-		add_child(control)
-		set_slot(
-			slot_index,
-			!left_port.is_empty(),
-			left_port.get("port_type", -1),
-			left_port.get("port_color", Color.WHITE),
-			!right_port.is_empty(),
-			right_port.get("port_type", -1),
-			right_port.get("port_color", Color.WHITE),
-		)
-		if slot.has("member"):
-			_add_member_to_cache(slot.member.member_type, slot.member.member_name, slot_index, -1, "none")
-		if left_port:
-			set_slot_metadata_left(slot_index, left_port)
-			if left_port.has("member"):
-				_add_member_to_cache(left_port.member.member_type, left_port.member.member_name, slot_index, left_port_index, "left")
-			left_port_index += 1
-		if right_port:
-			set_slot_metadata_right(slot_index, right_port)
-			if right_port.has("member"):
-				_add_member_to_cache(right_port.member.member_type, right_port.member.member_name, slot_index, right_port_index, "right")
-			right_port_index += 1
-
-
-func manage_members() -> void:
-	editor.member_selector.show_multi_select(
-		object_type,
-		get_object(),
-		editor.member_selector.get_all_member_types(),
-		get_object_view().get("members"),
-		editor.current_view.transactions.override_object_view_members,
-	)
-
-
 func _add_member_to_cache(member_type: String, member_name: StringName, slot_id: int, port_id: int, port_side: String) -> void:
 	_member_cache.get_or_add(member_type, { })[member_name] = {
 		"member_type": member_type,
@@ -296,53 +340,6 @@ func _add_member_to_cache(member_type: String, member_name: StringName, slot_id:
 
 func _get_member_cache(member_type: String, member_name: StringName) -> Dictionary:
 	return _member_cache.get(member_type, { }).get(member_name, { })
-
-
-func get_member_port_id(member_type: String, member_name: StringName) -> int:
-	return _get_member_cache(member_type, member_name).get("port_id", -1)
-
-
-func get_member_slot_id(member_type: String, member_name: StringName) -> int:
-	return _get_member_cache(member_type, member_name).get("slot_id", -1)
-
-
-func get_member_from_port_id_and_type(port_id: int, member_type: String) -> Dictionary:
-	if !_member_cache.has(member_type):
-		return { }
-	for member_name in _member_cache[member_type]:
-		var member: Dictionary = _member_cache[member_type][member_name]
-		if member["port_id"] == port_id:
-			return member
-	return { }
-
-
-func get_member_from_port_id_and_side(port_id: int, side: String) -> Dictionary:
-	for entry_member_type in _member_cache:
-		for member_name in _member_cache[entry_member_type]:
-			var member: Dictionary = _member_cache[entry_member_type][member_name]
-			if member["port_id"] == port_id && member["port_side"] == side:
-				return member
-	return { }
-
-
-func get_member_from_slot_id(slot_id: int, member_type: String) -> Dictionary:
-	if !_member_cache.has(member_type):
-		return { }
-	for member_name in _member_cache[member_type]:
-		var member: Dictionary = _member_cache[member_type][member_name]
-		if member["slot_id"] == slot_id:
-			return member
-	return { }
-
-
-func get_members_from_slot_id(slot_id: int) -> Array:
-	var output := []
-	for member_type in _member_cache:
-		for member_name in _member_cache[member_type]:
-			var member: Dictionary = _member_cache[member_type][member_name]
-			if member["slot_id"] == slot_id:
-				output.append(member)
-	return output
 
 
 func _update_titlebar() -> void:

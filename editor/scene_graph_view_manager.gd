@@ -1,11 +1,8 @@
 @tool
 extends Node
 
-@export var editor: SceneGraphEditor
-
 const COL_MAIN: int = 0
 const COL_BUTTONS: int = 1
-
 const default_views: Dictionary = {
 	"Default: Signals": {
 		"hook_options": {
@@ -67,21 +64,19 @@ const default_views: Dictionary = {
 	},
 }
 
+@export var editor: SceneGraphEditor
+
 var interface_memory: Dictionary = {
 	"view_copy_preferences": {
 		"view_rules": {
 		},
 	},
 }
-
 var global_views: Dictionary = { }
 var local_views: Dictionary = { }
-
 var active_local_view_metadata: Dictionary = { }
 var active_local_view: SceneGraphView
-
 var edit_views_dialog: EditViewsDialog
-
 var _pending_local_view_activation: Dictionary = { }
 var _editor_state_fully_loaded := false
 
@@ -368,10 +363,6 @@ func get_fallback_local_view_metadata() -> Dictionary:
 	return _help_no_views_available()
 
 
-func _help_no_views_available() -> Dictionary:
-	return create_default_views()
-
-
 func create_default_views() -> Dictionary:
 	var first_metadata: Dictionary
 	for name in default_views:
@@ -396,11 +387,14 @@ func sanitize_view_rules(view: SceneGraphView) -> void:
 func reapply_rules() -> void:
 	activate_view(active_local_view_metadata)
 
+
 ### EDIT VIEWS DIALOG
-
-
 func show_dialog():
 	edit_views_dialog.show()
+
+
+func _help_no_views_available() -> Dictionary:
+	return create_default_views()
 
 
 class EditViewsDialog extends RefCounted:

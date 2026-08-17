@@ -1,11 +1,15 @@
 @tool
 extends RefCounted
 
+const ACTION_RESET_HANDLE_POSITION: int = 100
+
 static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
 static var ConnectionHandleElement: Script = preload("res://addons/scene-graphs/editor/elements/connection_handle_element.gd")
 
 var editor: SceneGraphEditor
 var _connections_with_elements: Array[Dictionary] = []
+var _line_end_cache_time: int
+var _line_end_cache: Dictionary
 
 
 func _init(editor: SceneGraphEditor):
@@ -47,9 +51,115 @@ func create_hook_options() -> Options:
 func get_hook_description() -> String:
 	return "Shows movable handles for all graph connections, allowing you to redirect each individual connection to avoid tangling.\nNote: It's recommended to have this enabled when using Method and Signal connections; handles display connection flags and let you edit them when selected."
 
+
+### CAPABILITY: override_connection_lines
+func get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
+	var cached_connection := _find_connection_from_line_ends(from_position, to_position)
+	if cached_connection:
+		if cached_connection.graph_element.get_current_mid_point_offset() != Vector2.ZERO:
+			return get_adjusted_connection_line(from_position, to_position, cached_connection.graph_element)
+	return []
+
+
+func get_adjusted_connection_line(from_position: Vector2, to_position: Vector2, connection_graph_element: GraphElement) -> PackedVector2Array:
+	var x_diff: float = (to_position.x - from_position.x)
+	var cp_offset: float = x_diff * 0.3
+	if x_diff < 0:
+		cp_offset *= -1
+
+	var mid_point := (from_position + to_position) / 2
+
+	var curve := Curve2D.new()
+	curve.add_point(from_position)
+	curve.set_point_out(0, Vector2(cp_offset, 0))
+	curve.add_point(mid_point + connection_graph_element.get_current_mid_point_offset() * editor.zoom)
+	curve.set_point_in(1, -(to_position - from_position) * 0.25)
+	curve.set_point_out(1, (to_position - from_position) * 0.25)
+	curve.add_point(to_position)
+	curve.set_point_in(2, Vector2(-cp_offset, 0))
+
+	return curve.tessellate(5, 2.0)
+
+
+func match_line_ends(from_position: Vector2, to_position: Vector2, tolerance: float, line_ends: Array) -> bool:
+	var from_dist_sqr := from_position.distance_squared_to(line_ends[0])
+	if from_dist_sqr > tolerance:
+		return false
+	var to_dist_sqr := to_position.distance_squared_to(line_ends[1])
+	if to_dist_sqr > tolerance:
+		return false
+	return true
+
+
+### CAPABILITY: view_serialization
+func edit_serialized_view(serialized: Dictionary) -> void:
+	for object_type in serialized.scene_objects:
+		var objects_for_type: Dictionary = serialized.scene_objects[object_type]
+		for object_key in objects_for_type:
+			var object_view: Dictionary = objects_for_type[object_key]
+			if !object_view.has("connection_handles"):
+				continue
+			var handles: Array = object_view["connection_handles"]
+			var handle_index := 0
+			while handle_index < handles.size():
+				var handle_data: Dictionary = handles[handle_index]
+				if handle_data.has("member_connection"):
+					var member_connection := handle_data.get("member_connection") as Dictionary
+					if member_connection.has("from_object") && member_connection.has("to_object"):
+						var serialized_key_from = editor.current_view.object_key_serialize(member_connection.from_object_type, member_connection.from_object)
+						var serialized_key_to = editor.current_view.object_key_serialize(member_connection.to_object_type, member_connection.to_object)
+
+						if serialized_key_from != null && serialized_key_to != null:
+							member_connection.from_object = serialized_key_from
+							member_connection.to_object = serialized_key_to
+							handle_index += 1
+							continue
+				# invalid
+				handles.remove_at(handle_index)
+
+
+func edit_deserialized_view(view: SceneGraphView) -> void:
+	for object_type in view.scene_objects:
+		var objects_for_type: Dictionary = view.scene_objects[object_type]
+		for object_key in objects_for_type:
+			var object_view: Dictionary = objects_for_type[object_key]
+			if !object_view.has("connection_handles"):
+				continue
+			var handles: Array = object_view["connection_handles"]
+			var handle_index := 0
+			while handle_index < handles.size():
+				var handle_data: Dictionary = handles[handle_index]
+				if handle_data.has("member_connection"):
+					var member_connection := handle_data.get("member_connection") as Dictionary
+					if member_connection.has("from_object") && member_connection.has("to_object"):
+						var deserialized_key_from = view.object_key_deserialize(member_connection.from_object_type, member_connection.from_object)
+						var deserialized_key_to = view.object_key_deserialize(member_connection.to_object_type, member_connection.to_object)
+
+						if deserialized_key_from != null && deserialized_key_to != null:
+							member_connection.from_object = deserialized_key_from
+							member_connection.to_object = deserialized_key_to
+							handle_index += 1
+							continue
+				# invalid
+				handles.remove_at(handle_index)
+
+
+### CAPABILITY: populate_popup_menu
+func populate_popup_menu(at_position: Vector2, menu: PopupMenu, actions: Dictionary[int, Callable]) -> void:
+	var any := false
+	for name in editor.selected_nodes:
+		var node := editor.get_node_or_null(NodePath(name))
+		if is_instance_of(node, ConnectionHandleElement):
+			any = true
+			break
+	if !any:
+		return
+	menu.add_separator("Connection Handle")
+	menu.add_item("Reset Handle Position", ACTION_RESET_HANDLE_POSITION)
+	actions[ACTION_RESET_HANDLE_POSITION] = _action_reset_handle_position
+
+
 ### CONNECTIONS
-
-
 func _on_connections_draw() -> void:
 	for cached_connection: Dictionary in _connections_with_elements:
 		if !is_instance_valid(cached_connection.graph_element):
@@ -187,40 +297,6 @@ func _reposition_connection_element(cached_connection: Dictionary) -> void:
 		rotation = (line_to - line_from).angle()
 	graph_element.reposition(new_position, rotation)
 
-### CAPABILITY: override_connection_lines
-
-
-func get_connection_line(from_position: Vector2, to_position: Vector2) -> PackedVector2Array:
-	var cached_connection := _find_connection_from_line_ends(from_position, to_position)
-	if cached_connection:
-		if cached_connection.graph_element.get_current_mid_point_offset() != Vector2.ZERO:
-			return get_adjusted_connection_line(from_position, to_position, cached_connection.graph_element)
-	return []
-
-
-func get_adjusted_connection_line(from_position: Vector2, to_position: Vector2, connection_graph_element: GraphElement) -> PackedVector2Array:
-	var x_diff: float = (to_position.x - from_position.x)
-	var cp_offset: float = x_diff * 0.3
-	if x_diff < 0:
-		cp_offset *= -1
-
-	var mid_point := (from_position + to_position) / 2
-
-	var curve := Curve2D.new()
-	curve.add_point(from_position)
-	curve.set_point_out(0, Vector2(cp_offset, 0))
-	curve.add_point(mid_point + connection_graph_element.get_current_mid_point_offset() * editor.zoom)
-	curve.set_point_in(1, -(to_position - from_position) * 0.25)
-	curve.set_point_out(1, (to_position - from_position) * 0.25)
-	curve.add_point(to_position)
-	curve.set_point_in(2, Vector2(-cp_offset, 0))
-
-	return curve.tessellate(5, 2.0)
-
-
-var _line_end_cache_time: int
-var _line_end_cache: Dictionary
-
 
 func _find_connection_from_line_ends(from_position: Vector2, to_position: Vector2) -> Dictionary:
 	var now := Engine.get_process_frames()
@@ -241,16 +317,6 @@ func _find_connection_from_line_ends(from_position: Vector2, to_position: Vector
 			if match_line_ends(from_position, to_position, 5, cached_connection.line_ends_absolute):
 				return cached_connection
 	return { }
-
-
-func match_line_ends(from_position: Vector2, to_position: Vector2, tolerance: float, line_ends: Array) -> bool:
-	var from_dist_sqr := from_position.distance_squared_to(line_ends[0])
-	if from_dist_sqr > tolerance:
-		return false
-	var to_dist_sqr := to_position.distance_squared_to(line_ends[1])
-	if to_dist_sqr > tolerance:
-		return false
-	return true
 
 
 func _get_line_end_cache_key(from_position: Vector2) -> int:
@@ -322,76 +388,6 @@ func _on_end_node_move() -> void:
 			continue
 		if cached_connection.graph_element.selected:
 			cached_connection.graph_element.apply_mid_point_offset_change()
-
-
-### CAPABILITY: view_serialization
-func edit_serialized_view(serialized: Dictionary) -> void:
-	for object_type in serialized.scene_objects:
-		var objects_for_type: Dictionary = serialized.scene_objects[object_type]
-		for object_key in objects_for_type:
-			var object_view: Dictionary = objects_for_type[object_key]
-			if !object_view.has("connection_handles"):
-				continue
-			var handles: Array = object_view["connection_handles"]
-			var handle_index := 0
-			while handle_index < handles.size():
-				var handle_data: Dictionary = handles[handle_index]
-				if handle_data.has("member_connection"):
-					var member_connection := handle_data.get("member_connection") as Dictionary
-					if member_connection.has("from_object") && member_connection.has("to_object"):
-						var serialized_key_from = editor.current_view.object_key_serialize(member_connection.from_object_type, member_connection.from_object)
-						var serialized_key_to = editor.current_view.object_key_serialize(member_connection.to_object_type, member_connection.to_object)
-
-						if serialized_key_from != null && serialized_key_to != null:
-							member_connection.from_object = serialized_key_from
-							member_connection.to_object = serialized_key_to
-							handle_index += 1
-							continue
-				# invalid
-				handles.remove_at(handle_index)
-
-
-func edit_deserialized_view(view: SceneGraphView) -> void:
-	for object_type in view.scene_objects:
-		var objects_for_type: Dictionary = view.scene_objects[object_type]
-		for object_key in objects_for_type:
-			var object_view: Dictionary = objects_for_type[object_key]
-			if !object_view.has("connection_handles"):
-				continue
-			var handles: Array = object_view["connection_handles"]
-			var handle_index := 0
-			while handle_index < handles.size():
-				var handle_data: Dictionary = handles[handle_index]
-				if handle_data.has("member_connection"):
-					var member_connection := handle_data.get("member_connection") as Dictionary
-					if member_connection.has("from_object") && member_connection.has("to_object"):
-						var deserialized_key_from = view.object_key_deserialize(member_connection.from_object_type, member_connection.from_object)
-						var deserialized_key_to = view.object_key_deserialize(member_connection.to_object_type, member_connection.to_object)
-
-						if deserialized_key_from != null && deserialized_key_to != null:
-							member_connection.from_object = deserialized_key_from
-							member_connection.to_object = deserialized_key_to
-							handle_index += 1
-							continue
-				# invalid
-				handles.remove_at(handle_index)
-
-### CAPABILITY: populate_popup_menu
-const ACTION_RESET_HANDLE_POSITION: int = 100
-
-
-func populate_popup_menu(at_position: Vector2, menu: PopupMenu, actions: Dictionary[int, Callable]) -> void:
-	var any := false
-	for name in editor.selected_nodes:
-		var node := editor.get_node_or_null(NodePath(name))
-		if is_instance_of(node, ConnectionHandleElement):
-			any = true
-			break
-	if !any:
-		return
-	menu.add_separator("Connection Handle")
-	menu.add_item("Reset Handle Position", ACTION_RESET_HANDLE_POSITION)
-	actions[ACTION_RESET_HANDLE_POSITION] = _action_reset_handle_position
 
 
 func _action_reset_handle_position() -> void:
