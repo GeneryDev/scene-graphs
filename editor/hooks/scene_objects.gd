@@ -148,9 +148,12 @@ func _on_delete_nodes_request(graph_nodes: Array[StringName]) -> void:
 
 func _on_selection_changed_with_script(script: Script, nodes: Array[Node]) -> void:
 	if script == SceneObjectGraphNode:
-		select_nodes(nodes.map(func (graph_node : GraphNode):
-			return graph_node.get_object();
-		));
+		select_nodes(nodes.map(_map_graph_node_to_object))
+
+
+func _map_graph_node_to_object(graph_node: GraphNode) -> Object:
+	return graph_node.get_object()
+
 
 func select_nodes(nodes: Array) -> void:
 	EditorInterface.get_selection().clear()

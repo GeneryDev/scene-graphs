@@ -705,19 +705,27 @@ class EqualDistributionHBoxContainer extends Container:
 
 
 func _on_selection_changed_with_script(script: Script, nodes: Array[Node]) -> void:
-	if script == ConnectionHandleElement && nodes.all(
-		func(n: Node) -> bool:
-			return n.has_meta(META_NAME_EXTENSION)
-	):
-		select_connections(nodes.map(func (handle : Node):
-			return handle.graph_connection;
-		).filter(func (c : Dictionary) -> bool:
-			var from_graph_node := editor.get_node_or_null(NodePath(c.from_node));
-			var to_graph_node := editor.get_node_or_null(NodePath(c.to_node));
-			return from_graph_node != null && to_graph_node != null;
-		));
+	if script == ConnectionHandleElement && nodes.all(_filter_handle_has_extension):
+		select_connections(
+			nodes.map(_map_handle_to_graph_connection)
+			.filter(_filter_valid_graph_connections),
+		)
 	else:
 		_stop_editing_connection_properties()
+
+
+func _filter_handle_has_extension(n: Node) -> bool:
+	return n.has_meta(META_NAME_EXTENSION)
+
+
+func _map_handle_to_graph_connection(handle: Node) -> Dictionary:
+	return handle.graph_connection
+
+
+func _filter_valid_graph_connections(c: Dictionary) -> bool:
+	var from_graph_node := editor.get_node_or_null(NodePath(c.from_node))
+	var to_graph_node := editor.get_node_or_null(NodePath(c.to_node))
+	return from_graph_node != null && to_graph_node != null
 
 
 func select_connections(connections: Array) -> void:
