@@ -1,10 +1,15 @@
 extends GraphNode
+## The standard GraphNode in Scene Graphs. Enables hooks to interact with it for adding slots/ports based on view data.
 
 const PORT_COLOR_WILDCARD := Color(0xe0e0e0ff)
 
+## The object type represented by this graph node.
 var object_type: String
+## The object represented by this graph node.
 var obj: Object
+## The [SceneGraphEditor] instance this graph node is in.
 var editor: SceneGraphEditor
+## The minimum size for this node set by the user (by resizing the node)
 var user_size: Vector2
 var _member_cache: Dictionary = { }
 var _last_built_view: Dictionary = { }
@@ -47,26 +52,32 @@ func _init(object_type: String, obj: Object, editor: SceneGraphEditor):
 	tree_entered.connect(_on_theme_changed)
 
 
+## Retrieves the object this graph node represents
 func get_object() -> Object:
 	return obj
 
 
+## Retrieves the object type this graph node represents
 func get_object_type() -> String:
 	return object_type
 
 
+## Retrieves the object key for the object this graph node represents
 func get_object_key() -> Variant:
 	return editor.current_view.view_object_to_object_key(object_type, get_object())
 
 
+## Retrieves the object view data for the object this graph node represents
 func get_object_view() -> Dictionary:
 	return editor.current_view.get_object_view(object_type, get_object())
 
 
+## Retrieves the name of the object this graph node represents
 func get_object_name() -> String:
 	return obj.name if obj is Node else (obj.resource_name if obj is Resource else str(obj))
 
 
+## Updates the state of this graph node to match the data about it stored in the current scene graph view.
 func update_from_view() -> void:
 	_building_from_view = true
 	var obj_view := get_object_view()
@@ -88,6 +99,7 @@ func update_from_view() -> void:
 	_building_from_view = false
 
 
+## Updates the scene graph view of this object to match the state of this graph node.
 func update_view() -> void:
 	if _building_from_view:
 		return
@@ -99,6 +111,7 @@ func update_view() -> void:
 	obj_view["user_size"] = user_size
 
 
+## Resets the size of this graph node, based on its contents and the minimum size set by the user.
 func reset_to_user_size() -> void:
 	reset_size()
 	var size = self.size
@@ -107,6 +120,7 @@ func reset_to_user_size() -> void:
 	self.size = size.max(user_size)
 
 
+## Rebuilds the contents of this graph node from the view.
 func rebuild_contents_from_view() -> void:
 	clear_all_slots()
 	_member_cache.clear()
@@ -116,10 +130,12 @@ func rebuild_contents_from_view() -> void:
 		remove_child(child)
 		child.queue_free()
 
-	create_and_add_contents()
+	_create_and_add_contents()
 	reset_to_user_size()
 
 
+## Intended for use by "claim_object_graph_node_member_slots"-capable hooks, to check if they "won the bid" over a particular member.
+## Note that if there's a tie for first, all those tied hooks are considered to have "won" for the purposes of this method.
 func claim_object_graph_node_member_slot(hook: Object, member_type: String, member_name: StringName) -> bool:
 	var highest_bid: float = 0
 	var matching_bid: float = 0
@@ -132,7 +148,83 @@ func claim_object_graph_node_member_slot(hook: Object, member_type: String, memb
 	return matching_bid == highest_bid
 
 
-func create_and_add_contents() -> void:
+## Opens the member selector to manage this object's members.
+## Equivalent to pressing the Manage Members button in the interface.
+func manage_members() -> void:
+	editor.member_selector.show_multi_select(
+		object_type,
+		get_object(),
+		editor.member_selector.get_all_member_types(),
+		get_object_view().get("members"),
+		editor.current_view.transactions.override_object_view_members,
+	)
+
+
+## Given a member type and name, returns the port ID corresponding to the member, or -1 if not present.
+func get_member_port_id(member_type: String, member_name: StringName) -> int:
+	return _get_member_cache(member_type, member_name).get("port_id", -1)
+
+
+## Given a member type and name, returns the slot ID corresponding to the member, or -1 if not present.
+func get_member_slot_id(member_type: String, member_name: StringName) -> int:
+	return _get_member_cache(member_type, member_name).get("slot_id", -1)
+
+
+## Given a port ID and member type, returns information about the represented member.
+## The dictionary contains the following: "member_type", "member_name", "slot_id", "port_id" and "port_side".
+## Most are self-explanatory, but the "port_side" can be one of "left", "right" and "none".
+## Returns an empty dictionary if not present.
+func get_member_from_port_id_and_type(port_id: int, member_type: String) -> Dictionary:
+	if !_member_cache.has(member_type):
+		return { }
+	for member_name in _member_cache[member_type]:
+		var member: Dictionary = _member_cache[member_type][member_name]
+		if member["port_id"] == port_id:
+			return member
+	return { }
+
+
+## Given a port ID and side (one of "left", "right" and "none"), returns information about the represented member.
+## The dictionary contains the following: "member_type", "member_name", "slot_id", "port_id" and "port_side".
+## Returns an empty dictionary if not present.
+func get_member_from_port_id_and_side(port_id: int, side: String) -> Dictionary:
+	for entry_member_type in _member_cache:
+		for member_name in _member_cache[entry_member_type]:
+			var member: Dictionary = _member_cache[entry_member_type][member_name]
+			if member["port_id"] == port_id && member["port_side"] == side:
+				return member
+	return { }
+
+
+## Given a slot ID and member type, returns information about the represented member.
+## The dictionary contains the following: "member_type", "member_name", "slot_id", "port_id" and "port_side".
+## Most are self-explanatory, but the "port_side" can be one of "left", "right" and "none".
+## Returns an empty dictionary if not present.
+func get_member_from_slot_id(slot_id: int, member_type: String) -> Dictionary:
+	if !_member_cache.has(member_type):
+		return { }
+	for member_name in _member_cache[member_type]:
+		var member: Dictionary = _member_cache[member_type][member_name]
+		if member["slot_id"] == slot_id:
+			return member
+	return { }
+
+
+## Given a slot ID, returns an array of members (Dictionaries) corresponding to that slot.
+## The dictionaries contains the following: "member_type", "member_name", "slot_id", "port_id" and "port_side".
+## Most are self-explanatory, but the "port_side" can be one of "left", "right" and "none".
+## Returns an empty array if the slot is not present.
+func get_members_from_slot_id(slot_id: int) -> Array:
+	var output := []
+	for member_type in _member_cache:
+		for member_name in _member_cache[member_type]:
+			var member: Dictionary = _member_cache[member_type][member_name]
+			if member["slot_id"] == slot_id:
+				output.append(member)
+	return output
+
+
+func _create_and_add_contents() -> void:
 	if _custom_titlebar != null:
 		_set_custom_titlebar_slot()
 
@@ -189,63 +281,6 @@ func create_and_add_contents() -> void:
 			if right_port.has("member"):
 				_add_member_to_cache(right_port.member.member_type, right_port.member.member_name, slot_index, right_port_index, "right")
 			right_port_index += 1
-
-
-func manage_members() -> void:
-	editor.member_selector.show_multi_select(
-		object_type,
-		get_object(),
-		editor.member_selector.get_all_member_types(),
-		get_object_view().get("members"),
-		editor.current_view.transactions.override_object_view_members,
-	)
-
-
-func get_member_port_id(member_type: String, member_name: StringName) -> int:
-	return _get_member_cache(member_type, member_name).get("port_id", -1)
-
-
-func get_member_slot_id(member_type: String, member_name: StringName) -> int:
-	return _get_member_cache(member_type, member_name).get("slot_id", -1)
-
-
-func get_member_from_port_id_and_type(port_id: int, member_type: String) -> Dictionary:
-	if !_member_cache.has(member_type):
-		return { }
-	for member_name in _member_cache[member_type]:
-		var member: Dictionary = _member_cache[member_type][member_name]
-		if member["port_id"] == port_id:
-			return member
-	return { }
-
-
-func get_member_from_port_id_and_side(port_id: int, side: String) -> Dictionary:
-	for entry_member_type in _member_cache:
-		for member_name in _member_cache[entry_member_type]:
-			var member: Dictionary = _member_cache[entry_member_type][member_name]
-			if member["port_id"] == port_id && member["port_side"] == side:
-				return member
-	return { }
-
-
-func get_member_from_slot_id(slot_id: int, member_type: String) -> Dictionary:
-	if !_member_cache.has(member_type):
-		return { }
-	for member_name in _member_cache[member_type]:
-		var member: Dictionary = _member_cache[member_type][member_name]
-		if member["slot_id"] == slot_id:
-			return member
-	return { }
-
-
-func get_members_from_slot_id(slot_id: int) -> Array:
-	var output := []
-	for member_type in _member_cache:
-		for member_name in _member_cache[member_type]:
-			var member: Dictionary = _member_cache[member_type][member_name]
-			if member["slot_id"] == slot_id:
-				output.append(member)
-	return output
 
 
 func _build_custom_titlebar() -> void:

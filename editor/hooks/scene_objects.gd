@@ -95,9 +95,7 @@ func populate_graph_nodes_from_view() -> void:
 			graph_node = existing
 			_disconnect_all_for_node(existing.name)
 		else:
-			graph_node = editor.current_view.instantiate_graph_node_for_object(OBJECT_TYPE_NODE, obj, SceneObjectGraphNode)
-			if graph_node:
-				editor.add_child(graph_node)
+			graph_node = editor.current_view.create_graph_node_for_object(OBJECT_TYPE_NODE, obj, SceneObjectGraphNode)
 
 		graph_node.update_from_view()
 

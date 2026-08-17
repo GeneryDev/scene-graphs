@@ -19,6 +19,7 @@ func _init(editor: SceneGraphEditor):
 	self.editor = editor
 
 
+## Returns an array of all member types that "configure_member_selector"-capable hooks have configured. 
 func get_all_member_types() -> Array[String]:
 	if all_member_types:
 		return all_member_types
@@ -32,6 +33,8 @@ func get_all_member_types() -> Array[String]:
 	return all_member_types
 
 
+## Returns an array of all member types that "configure_member_selector"-capable hooks have configured,
+## with the "is_input" flag set to true.
 func get_all_input_member_types() -> Array[String]:
 	if all_input_member_types:
 		return all_input_member_types
@@ -46,6 +49,8 @@ func get_all_input_member_types() -> Array[String]:
 	return all_input_member_types
 
 
+## Returns an array of all member types that "configure_member_selector"-capable hooks have configured,
+## with the "is_output" flag set to true.
 func get_all_output_member_types() -> Array[String]:
 	if all_output_member_types:
 		return all_output_member_types
@@ -60,6 +65,13 @@ func get_all_output_member_types() -> Array[String]:
 	return all_output_member_types
 
 
+## Shows the member selector, allowing the user to select exactly one from an object's members.
+## [param object_type]: The object type that's being inspected.
+## [param obj]: The object that's being inspected.
+## [param member_types]: The list of member types to show in the selector.
+## [param member_callback]: The callable that will be invoked when the user confirms their selection.
+## This callback should take the following parameters, corresponding to the selected member:
+## [code](object_type : String, object : Object, member_type : String, member_name : StringName)[/code]
 func show_single_select(object_type: String, obj: Object, member_types: Array[String], member_callback: Callable) -> void:
 	if !obj:
 		return
@@ -83,6 +95,17 @@ func show_single_select(object_type: String, obj: Object, member_types: Array[St
 	EditorInterface.popup_dialog_centered(_active.dialog)
 
 
+## Shows the member selector, allowing the user to any combination of members.
+## [param object_type]: The object type that's being inspected.
+## [param obj]: The object that's being inspected.
+## [param member_types]: The list of member types to show in the selector.
+## [param active_members]: A map of member types to lists of member names,
+## which are to be already checked when the dialog is shown.
+## [param member_callback]: The callable that will be invoked when the user confirms their selection.
+## This callback should take the following parameters:
+## [code](object_type : String, object : Object, checked_members_by_type : Dictionary)[/code]
+## The checked_members_by_type dictionary will have the same format as [param active_members],
+## though only containing member types that are shown on the interface. 
 func show_multi_select(object_type: String, obj: Object, member_types: Array[String], active_members: Dictionary, member_callback: Callable) -> void:
 	if !obj:
 		return

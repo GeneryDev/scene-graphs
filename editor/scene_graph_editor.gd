@@ -2,21 +2,36 @@
 class_name SceneGraphEditor
 extends GraphEdit
 
+## Fired when graph connections have changed.
 signal connections_changed()
+## Fired when the selection has changed.
 signal selection_changed()
-signal view_updated()
+## Fired when the selection has changed, with the following parameters:
+## [param script]: if non-null, it means all selected nodes have the same script.
+## [param selected_nodes]: the list of selected nodes (i.e. GraphElement nodes)
 signal selection_changed_with_script(script: Script, selected_nodes: Array[Node])
+## Fired when the current view's contents has changed, or when the view changes altogether. 
+signal view_updated()
+## Fired when the connection line cache is invalidated via [method invalidate_connection_line_cache].
 signal connection_line_cache_invalidated()
 
+## The edited scene root. Shorthand for [code]EditorInterface.get_edited_scene_root()[/code]
 var scene_root: Node:
 	get:
 		return EditorInterface.get_edited_scene_root()
+## The list of selected nodes (or rather, the names of selected GraphElement nodes) 
 var selected_nodes: Array[StringName] = []
+## Whether a GraphElement is currently being dragged and moved.
 var dragging: bool = false
+## The [InterfaceSignals] inner class instance.
 var interface_signals: InterfaceSignals
+## The [SceneGraphMemberSelector] instance for this editor. Use this to show and interact with the member selector.
 var member_selector: SceneGraphMemberSelector
+## The [Arranger] inner class instance.
 var arranger: Arranger
+## The [Hooks] inner class instance.
 var hooks: Hooks
+## The current [SceneGraphView].
 var current_view: SceneGraphView:
 	get:
 		return current_view
@@ -26,6 +41,7 @@ var current_view: SceneGraphView:
 		current_view = value
 		if current_view:
 			current_view.view_updated.connect(_on_current_view_updated)
+## The internal "_connection_layer" node. This is the parent of all [Line2D] nodes that correspond to each connection.
 var connections_layer: Control
 var _port_types_by_name: Dictionary[StringName, int] = {
 	&"": -1,
@@ -44,7 +60,6 @@ func _init():
 	hooks = Hooks.new(self)
 
 
-### CORE
 func _ready() -> void:
 	if is_part_of_edited_scene():
 		return
@@ -52,6 +67,11 @@ func _ready() -> void:
 	interface_signals.connect_all()
 	for hook in hooks.configure_port_types:
 		hook.configure_port_types()
+
+
+func _process(delta: float) -> void:
+	if is_visible_in_tree():
+		arranger.flush_arrange()
 
 
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
@@ -66,6 +86,8 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 		hook.drop_data(at_position, data)
 
 
+## Clears this graph by removing and freeing all elements, and removing all connections.
+## This does not need to be called by hooks, as it is done automatically when constructing the graph from a view.
 func clear():
 	clear_connections()
 	notify_connections_changed()
@@ -78,6 +100,8 @@ func clear():
 	notify_selection_changed()
 
 
+## Restores the given graph view and sets it as the current view.
+## This does not need to be called by hooks, as it is done automatically when switching views or scenes.
 func load(view: SceneGraphView) -> void:
 	assert(view != null, "Cannot load a null scene graph view")
 	current_view = view
@@ -94,21 +118,20 @@ func load(view: SceneGraphView) -> void:
 	view.notify_view_updated()
 
 	if is_visible_in_tree():
-		call_deferred(&"rearrange_after_load")
+		call_deferred(&"_rearrange_after_load")
 	else:
 		_pending_initial_draw = true
 
 
-func rearrange_after_load():
-	_pending_initial_draw = false
-	arranger.flush_arrange()
-	_update_nav_from_view()
-
-
+## Queues the given [GraphElement] to be rearranged at the earliest possible opportunity -- that is, next time the .
+## All queued nodes will be rearranged together.
 func queue_arrange(node: GraphElement) -> void:
 	arranger.queue_arrange(node)
 
 
+## Given a port type name, returns an int corresponding to that port type, which can be used
+## in [GraphNode]-related methods to set up ports and connections between them.
+## Please use this instead of hard-coding port type IDs to ensure better cross-hook compatibility; thanks.
 func port_type(name: StringName) -> int:
 	if _port_types_by_name.has(name):
 		return _port_types_by_name[name]
@@ -117,6 +140,9 @@ func port_type(name: StringName) -> int:
 		return -2
 
 
+## Given a port type name, assigns it a unique integer to be used
+## in [GraphNode]-related methods to set up ports and connections between them.
+## This method is to be used by hooks that implement the "configure_port_types" capability.
 func register_port_type(name: StringName) -> int:
 	if _port_types_by_name.has(name):
 		printerr("Scene graph port type '" + str(name) + "' has already been defined!")
@@ -127,6 +153,9 @@ func register_port_type(name: StringName) -> int:
 	return idx
 
 
+## Notifies the graph editor that the [GraphElement] selection has changed, and fires the relevant signals.
+## If the [param throttled] parameter is true, the execution of selection change callbacks is deferred to the end of the frame,
+## and it will avoid emitting repeated consecutive signals. If false, the callbacks and signals will execute immediately.
 func notify_selection_changed(throttled: bool = true) -> void:
 	if throttled:
 		if _selection_change_queued:
@@ -155,26 +184,33 @@ func notify_selection_changed(throttled: bool = true) -> void:
 	selection_changed_with_script.emit(only_script, only_script_nodes)
 
 
+## Notifies the graph editor that graph connections have changed.
 func notify_connections_changed() -> void:
 	connections_changed.emit()
 
 
+## Invalidates the connection line cache, forcing connections to be redrawn.
 func invalidate_connection_line_cache() -> void:
 	connection_lines_curvature = connection_lines_curvature
 	connection_line_cache_invalidated.emit()
 
 
+## Shorthand for calling [method connect_node] and [method notify_connections_changed]
 func connect_node_and_notify(from_node: StringName, from_port: int, to_node: StringName, to_port: int, keep_alive: bool = true) -> Error:
 	var err := connect_node(from_node, from_port, to_node, to_port)
 	notify_connections_changed()
 	return err
 
 
+## Shorthand for calling [method disconnect_node] and [method notify_connections_changed]
 func disconnect_node_and_notify(from_node: StringName, from_port: int, to_node: StringName, to_port: int) -> void:
 	disconnect_node(from_node, from_port, to_node, to_port)
 	notify_connections_changed()
 
 
+## Provides the default implementation of [method _get_connection_line], creating a sequence of points that make up a
+## curved line between two port positions. An optional curvature parameter is included to set the curvature of the line,
+## which if not set, defaults to the [member connection_lines_curvature] property.
 func get_default_connection_line(from_position: Vector2, to_position: Vector2, curvature: float = -1) -> PackedVector2Array:
 	if curvature < 0:
 		curvature = connection_lines_curvature
@@ -195,10 +231,18 @@ func get_default_connection_line(from_position: Vector2, to_position: Vector2, c
 		return curve.tessellate(1)
 
 
+## Converts a set of coordinates from the GraphEdit's Control coordinate space (Vector2.ZERO to [size]) to the
+## coordinate space of elements inside the graph (useful for [member GraphElement.position_offset], for example).
 func local_to_graph_position(position: Vector2) -> Vector2:
 	return (position + scroll_offset) / zoom
 
 
+## Given a dictionary representing a graph connection (with from_node, from_port, to_node, to_port),
+## checks whether all these conditions match:
+## 1. The connection represents valid graph nodes still in the editor.
+## 2. The ports refer to valid ports on the corresponding graph nodes.
+## 3. Native code has had a chance to build its "port cache", enabling [code]get_input_port_*()[/code] and [code]get_output_port_*()[/code] methods.
+## Returns true if and only if all the above conditions are met.
 func is_connection_ready(connection: Dictionary) -> bool:
 	var from_graph_node := get_node_or_null(NodePath(connection.from_node))
 	var to_graph_node := get_node_or_null(NodePath(connection.to_node))
@@ -216,6 +260,13 @@ func is_connection_ready(connection: Dictionary) -> bool:
 	return true
 
 
+## Given a dictionary representing a graph connection (with from_node, from_port, to_node, to_port),
+## and two port types, checks whether all these conditions match:
+## 1. The connection represents valid graph nodes still in the editor.
+## 2. The ports refer to valid ports on the corresponding graph nodes.
+## 3. Native code has had a chance to build its "port cache", enabling `get_input_port_*()` and `get_output_port_*()` methods.
+## 4. The port types of the corresponding ports match the port types given as parameters.
+## Returns true if and only if all the above conditions are met.
 func check_connection_port_types(connection: Dictionary, from_port_type: int, to_port_type: int) -> bool:
 	var from_graph_node := get_node_or_null(NodePath(connection.from_node))
 	var to_graph_node := get_node_or_null(NodePath(connection.to_node))
@@ -238,6 +289,7 @@ func check_connection_port_types(connection: Dictionary, from_port_type: int, to
 	return true
 
 
+## Given a position (such as mouse position from [popup_request]), returns the graph element at that location, if any.
 func get_graph_element_at_position(at_position: Vector2) -> GraphElement:
 	var children := get_children()
 	for i in range(children.size() - 1, -1, -1):
@@ -271,6 +323,12 @@ func _update_nav_view() -> void:
 	current_view.scene_data.zoom = zoom
 
 
+func _rearrange_after_load():
+	_pending_initial_draw = false
+	arranger.flush_arrange()
+	_update_nav_from_view()
+
+
 func _on_current_view_updated():
 	for hook in hooks.populate_graph_nodes_from_view:
 		hook.populate_graph_nodes_from_view()
@@ -289,7 +347,11 @@ func _get_connection_line(from_position: Vector2, to_position: Vector2) -> Packe
 	return get_default_connection_line(from_position, to_position)
 
 
-### HOOKS
+## Inner class handling all hook and capability related logic for an instance of [SceneGraphEditor]
+## 
+## This class implements a custom property getter; to access all hooks that implement a particular capability,
+## you can use either dot notation or the [method get] method, with the capability name as the property name.
+## This will return an array of hooks that implement the requested capability.
 class Hooks extends RefCounted:
 	const METHOD_NAME_GET_CAPABILITIES: StringName = &"get_scene_graph_capabilities"
 	const META_NAME_GRANTED_CAPABILITIES: StringName = &"_scene_graph_granted_capabilities"
@@ -433,6 +495,8 @@ class Hooks extends RefCounted:
 		add_hook(load("res://addons/scene-graphs/editor/hooks/view_rules/members_by_name.gd"))
 
 
+	## Adds a script as a hook.
+	## Returns true if and only if instantiation was successful and the minimum required methods were implemented.
 	func add_hook(script: Script) -> bool:
 		var instance: Object = script.new(editor)
 		if !instance:
@@ -444,6 +508,22 @@ class Hooks extends RefCounted:
 
 		_hooks.append(instance)
 
+		return true
+
+
+	## Registers a new capability, given a capability name
+	## and a list of required methods for hooks implementing such capability.
+	## Returns true if this was successful, or false if another capability with that name had already been registered.
+	## This should be called by hooks with the "configure_capabilities" capability.
+	func register_capability(name: String, required_methods: Array[StringName]) -> bool:
+		if _capabilities.has(name):
+			printerr("Failed to register capability '" + name + "': another capability with the same name is already registered!")
+			return false
+
+		_capabilities[name] = {
+			"required_methods": required_methods,
+			"hooks": [] as Array[Object],
+		}
 		return true
 
 
@@ -508,18 +588,6 @@ class Hooks extends RefCounted:
 		return true
 
 
-	func register_capability(name: String, required_methods: Array[StringName]) -> bool:
-		if _capabilities.has(name):
-			printerr("Failed to register capability '" + name + "': another capability with the same name is already registered!")
-			return false
-
-		_capabilities[name] = {
-			"required_methods": required_methods,
-			"hooks": [] as Array[Object],
-		}
-		return true
-
-
 	func _grant_capability(instance: Object, script: Script, capability: String) -> void:
 		_get_granted_capabilities(instance).append(capability)
 		_capabilities[capability].hooks.append(instance)
@@ -537,8 +605,9 @@ class Hooks extends RefCounted:
 		return null
 
 
-### UTILITY
+## Provides static utility methods
 class Utility extends RefCounted:
+	## Given an object, returns its Texture2D editor icon, either by its script or built-in class or type icon.
 	static func get_object_icon(obj: Object) -> Texture2D:
 		if obj == null:
 			return null
@@ -556,6 +625,7 @@ class Utility extends RefCounted:
 		return null
 
 
+	## Given a script, returns its Texture2D editor icon, if set via @icon. Returns null if none is set.
 	static func get_script_icon(script: Script) -> Texture2D:
 		var filepath := script.resource_path
 		var script_classes := ProjectSettings.get_global_class_list() as Array
@@ -567,7 +637,7 @@ class Utility extends RefCounted:
 		return null
 
 
-### INTERFACE SIGNALS
+## Inner class that handles general [GraphEdit] interface signals
 class InterfaceSignals extends RefCounted:
 	var editor: SceneGraphEditor
 
@@ -650,14 +720,15 @@ class InterfaceSignals extends RefCounted:
 
 	func _on_visibility_changed() -> void:
 		if editor._pending_initial_draw:
-			editor.call_deferred(&"rearrange_after_load")
+			editor.call_deferred(&"_rearrange_after_load")
 
 
 	func _on_scroll_offset_changed(offset: Vector2) -> void:
 		editor._update_nav_view()
 
 
-### Arranger
+## Inner class that handles logic for arranging [GraphElement] elements in a graph.
+## (hope to have custom arranging code at some point because the built-in logic is dogwater)
 class Arranger extends RefCounted:
 	var editor: SceneGraphEditor
 
