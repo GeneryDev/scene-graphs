@@ -756,6 +756,7 @@ class Arranger extends RefCounted:
 			elem.selected = true
 		editor.arrange_nodes()
 		editor.set_selected(null)
+		_queued_for_arrange.clear();
 
 
 	func _is_still_valid(node) -> bool:
