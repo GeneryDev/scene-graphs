@@ -115,7 +115,8 @@ func _on_current_view_updated():
 	for hook in hooks.populate_graph_node_connections:
 		hook.populate_graph_node_connections()
 	view_updated.emit()
-	arranger.flush_arrange()
+	if is_visible_in_tree():
+		arranger.flush_arrange()
 
 
 func rearrange_after_load():
