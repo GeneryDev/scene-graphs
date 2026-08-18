@@ -3,6 +3,8 @@ The Scene Graphs plugin provides an alternative way to view and edit your Godot 
 
 This plugin is also moddable, letting you add functionality to serve the particular needs of your project without editing plugin files directly, if necessary.
 
+<img width="1972" height="1144" alt="Godot_v4 7 1-stable_mono_win64_tYoFqzto46" src="https://github.com/user-attachments/assets/86a12ad2-289e-4616-a7a3-b7d387f907f8" />
+
 ## Features
 ### Method-Signal Connections
 * The scene graph can show connected signals and methods between nodes.
