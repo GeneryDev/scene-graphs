@@ -806,6 +806,8 @@ class ConnectionHandleExtension extends RefCounted:
 				continue
 			if (signal_connection_candidate.flags & CONNECT_PERSIST) == 0:
 				continue
+			if signal_connection_candidate.callable.get_object() != to_object:
+				continue
 			if signal_connection_candidate.callable.get_method() == method_name:
 				signal_connection = signal_connection_candidate
 
