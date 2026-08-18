@@ -502,7 +502,13 @@ class EditViewsDialog extends RefCounted:
 
 	func _populate_scene_info(metadata: Dictionary) -> void:
 		var scene_name_label: Label = _active["scene_name_label"]
-		scene_name_label.text = "This Scene (" + editor.scene_root.scene_file_path.get_file() + ")"
+		if editor.scene_root != null:
+			if editor.scene_root.scene_file_path:
+				scene_name_label.text = "This Scene (" + editor.scene_root.scene_file_path.get_file() + ")"
+			else:
+				scene_name_label.text = "This Scene (Unsaved)"
+		else:
+			scene_name_label.text = "This Scene (Empty)"
 
 		var localized_view: SceneGraphView = view_manager.get_localized_view(metadata.view_name)
 
