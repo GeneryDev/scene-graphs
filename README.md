@@ -52,6 +52,7 @@ I know signals and node references aren't the only things you may want to see in
 * Live updating of graph nodes when nodes are added, removed or renamed to the scene.
 * Live updating of connections and inspectors when changes are made outside the scene graph (for the time being, there's a reload button on the toolbar next to the view dropdown)
 * Better type validation for Node Reference connections.
+* Better node arranging algorithm (the default one is serviceable, but generates too many unnecessary line crossings.
 
 ## Disclaimers
 No AI was used in the making of this plugin.
