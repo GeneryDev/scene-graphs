@@ -40,7 +40,7 @@ This plugin is also moddable, letting you add functionality to serve the particu
 ### Moddable
 I know signals and node references aren't the only things you may want to see in a scene graph, so this plugin was built with moddability in mind. In fact, most of the features listed above are built as hooks -- the core of this plugin is a rather small, featureless GraphEdit with a View Manager UI to configure hooks. In short, hooks are scripts that get initialized alongside the scene graph editor, which can opt-in to any number of capabilities, such as configuring a view rule, adding a new port type, inserting elements into the standard object GraphNode, etc.
 
-[These modding capabilities are documented extensively in the wiki.](https://github.com/GeneryDev/scene-graphs/wiki)
+[These modding capabilities are documented extensively in the wiki.](https://github.com/GeneryDev/scene-graphs/wiki/Modding)
 
 ## Installation
 1. Download the plugin into your Godot project. Its location should be `addons/scene-graphs`.
