@@ -27,13 +27,17 @@ func get_view_rule_description() -> String:
 	return "Adds property members to each object in the graph, corresponding to properties of type NodePath, or Node-derived types."
 
 
-func generate_view_object_members(object_type: String, obj: Object, params: Variant) -> Array:
+func generate_view_object_members(object_type: String, obj: Object, params: Params) -> Array:
 	var members := []
 
+	var script_properties := SceneGraphEditor.Utility.collect_members(obj, &"get_script_property_list", &"", &"").map(func(d): return d.name) if params.script_members_only else []
+	
 	if obj is Node:
 		var node_obj: Node = obj
 		for property in obj.get_property_list():
 			var property_name: StringName = property.name
+			if params.script_members_only && !script_properties.has(property_name):
+				continue
 			var referenced_node: Node = null
 			if property.type == TYPE_NODE_PATH:
 				var path: NodePath = obj.get(property_name)
@@ -61,3 +65,17 @@ func generate_view_object_members(object_type: String, obj: Object, params: Vari
 				)
 
 	return members
+
+
+func create_view_rule_params() -> Object:
+	return Params.new()
+
+
+class Params extends RefCounted:
+	@export var script_members_only: bool = false
+
+	func get_property_description(property: StringName) -> String:
+		match property:
+			&"script_members_only":
+				return "If set, only script-defined properties will be added. Otherwise, all applicable properties, including from the base class, will be added."
+		return ""

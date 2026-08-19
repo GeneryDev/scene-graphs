@@ -45,8 +45,11 @@ func get_view_rule_label(params: Params) -> String:
 func generate_view_object_members(object_type: String, obj: Object, params: Params) -> Array:
 	var members := []
 
+	var script_properties := SceneGraphEditor.Utility.collect_members(obj, &"get_script_property_list", &"", &"").map(func(d): return d.name) if params.script_members_only && !params.properties.is_empty() else []
 	for property_name in params.properties:
 		if !(property_name in obj):
+			continue
+		if params.script_members_only && !script_properties.has(property_name):
 			continue
 		for property in obj.get_property_list():
 			if (property.usage & PROPERTY_USAGE_EDITOR) == 0:
@@ -64,8 +67,12 @@ func generate_view_object_members(object_type: String, obj: Object, params: Para
 						"member_name": property_name,
 					},
 				)
+
+	var script_methods := SceneGraphEditor.Utility.collect_members(obj, &"get_script_method_list", &"", &"").map(func(d): return d.name) if params.script_members_only && !params.methods.is_empty() else []
 	for method_name in params.methods:
 		if !obj.has_method(method_name):
+			continue
+		if params.script_members_only && !script_methods.has(method_name):
 			continue
 		members.append(
 			{
@@ -73,8 +80,12 @@ func generate_view_object_members(object_type: String, obj: Object, params: Para
 				"member_name": method_name,
 			},
 		)
+
+	var script_signals := SceneGraphEditor.Utility.collect_members(obj, &"get_script_signal_list", &"", &"").map(func(d): return d.name) if params.script_members_only && !params.signals.is_empty() else []
 	for signal_name in params.signals:
 		if !(obj.has_signal(signal_name) || obj.has_user_signal(signal_name)):
+			continue
+		if params.script_members_only && !script_signals.has(signal_name):
 			continue
 		members.append(
 			{
@@ -99,6 +110,7 @@ class Params extends RefCounted:
 	@export var methods: Array[StringName]
 	@export var signals: Array[StringName]
 
+	@export var script_members_only: bool = false
 
 	func get_property_description(property: StringName) -> String:
 		match property:
@@ -108,4 +120,6 @@ class Params extends RefCounted:
 				return "A list of methods that will automatically get added,\nif they exist on the target object.\nMust match the exact name they were defined with."
 			&"signals":
 				return "A list of signals that will automatically get added,\nif they exist on the target object.\nMust match the exact name they were defined with."
+			&"script_members_only":
+				return "If set, only script-defined members will be added. Otherwise, all applicable members, including from the base class, will be added."
 		return ""
