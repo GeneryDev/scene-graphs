@@ -713,19 +713,19 @@ class Transactions extends RefCounted:
 
 			var undo_redo := EditorInterface.get_editor_undo_redo()
 			undo_redo.create_action("Add object view", UndoRedo.MERGE_ALL, editor.scene_root, false)
-			
+
 			undo_redo.add_do_method(view, &"set_object_view", object_type, obj, obj_view)
 			for object in member_changes.added_object_views:
 				var added_obj_view := view.get_object_view(object.object_type, object.object)
 				undo_redo.add_do_method(view, &"set_object_view", object.object_type, object.object, added_obj_view)
 			undo_redo.add_do_method(view, &"notify_view_updated")
 			undo_redo.add_do_method(view, &"select_object", object_type, obj)
-			
+
 			undo_redo.add_undo_method(view, &"remove_object_view", object_type, obj)
 			for object in member_changes.added_object_views:
 				undo_redo.add_undo_method(view, &"remove_object_view", object.object_type, object.object)
 			undo_redo.add_undo_method(view, &"notify_view_updated")
-			
+
 			undo_redo.commit_action(false)
 
 

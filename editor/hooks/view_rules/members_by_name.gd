@@ -112,6 +112,7 @@ class Params extends RefCounted:
 
 	@export var script_members_only: bool = false
 
+
 	func get_property_description(property: StringName) -> String:
 		match property:
 			&"properties":

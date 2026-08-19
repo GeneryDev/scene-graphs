@@ -31,7 +31,7 @@ func generate_view_object_members(object_type: String, obj: Object, params: Para
 	var members := []
 
 	var script_properties := SceneGraphEditor.Utility.collect_members(obj, &"get_script_property_list", &"", &"").map(func(d): return d.name) if params.script_members_only else []
-	
+
 	if obj is Node:
 		var node_obj: Node = obj
 		for property in obj.get_property_list():
@@ -73,6 +73,7 @@ func create_view_rule_params() -> Object:
 
 class Params extends RefCounted:
 	@export var script_members_only: bool = false
+
 
 	func get_property_description(property: StringName) -> String:
 		match property:

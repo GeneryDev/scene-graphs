@@ -584,7 +584,7 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			if editor.current_view.has_object_view(OBJECT_TYPE_NODE if source is Node else OBJECT_TYPE_OTHER, source):
 				if editor.current_view.has_object_view_member(OBJECT_TYPE_NODE if source is Node else OBJECT_TYPE_OTHER, source, MEMBER_TYPE_SIGNAL, sgnal.get_name()):
 					continue
-			
+
 			_connections_not_in_view.append(
 				{
 					"port_type": editor.port_type(&"method"),

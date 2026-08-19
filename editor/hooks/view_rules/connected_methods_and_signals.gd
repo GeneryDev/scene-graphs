@@ -13,9 +13,9 @@ const SCRIPT_MEMBERS_REQUIRE_NEITHER := 4
 var editor: SceneGraphEditor
 
 
-func _get_connected_method_names(obj: Object, params : Params) -> Array:
+func _get_connected_method_names(obj: Object, params: Params) -> Array:
 	var script_methods := SceneGraphEditor.Utility.collect_members(obj, &"get_script_method_list", &"", &"").map(func(d): return d.name) if params.script_members_only != SCRIPT_MEMBERS_OFF else []
-	
+
 	var connected_methods: Array = []
 	for connection in obj.get_incoming_connections():
 		if (connection.flags & CONNECT_PERSIST) == 0:
@@ -54,9 +54,9 @@ func _get_connected_method_names(obj: Object, params : Params) -> Array:
 	return connected_methods
 
 
-func _get_connected_signal_names(obj: Object, params : Params) -> Array:
+func _get_connected_signal_names(obj: Object, params: Params) -> Array:
 	var script_signals := SceneGraphEditor.Utility.collect_members(obj, &"get_script_signal_list", &"", &"").map(func(d): return d.name) if params.script_members_only != SCRIPT_MEMBERS_OFF else []
-	
+
 	var list := []
 	for signal_info in obj.get_signal_list():
 		var signal_name := signal_info["name"] as StringName
@@ -66,9 +66,9 @@ func _get_connected_signal_names(obj: Object, params : Params) -> Array:
 			var flags := connection["flags"] as ConnectFlags
 			if (flags & ConnectFlags.CONNECT_PERSIST) == 0:
 				continue
-			
+
 			var method_name = connection.callable.get_method()
-				
+
 			match params.script_members_only:
 				SCRIPT_MEMBERS_OFF:
 					pass
@@ -152,7 +152,8 @@ func create_view_rule_params() -> Object:
 
 
 class Params extends RefCounted:
-	@export_enum("Off","Individual","Require Either","Require Both","Require Neither") var script_members_only: int = 0
+	@export_enum("Off", "Individual", "Require Either", "Require Both", "Require Neither") var script_members_only: int = 0
+
 
 	func get_property_description(property: StringName) -> String:
 		match property:
