@@ -637,6 +637,56 @@ class Utility extends RefCounted:
 		return null
 
 
+	## Collects a list of members for a particular object, using the three given getter functions.
+	## [br]
+	## [param script_getter]: Instance method name in [Script] class. Should take no arguments and return a list of dictionaries, each with a "name" property.
+	## [br]
+	## [param class_getter]: Static method name in [ClassDB] class. Should take 1 arguments (the class name) and return a list of dictionaries, each with a "name" property.
+	## [br]
+	## [param instance_getter]: Instance method name in [param obj]. Should take no arguments and return a list of dictionaries, each with a "name" property.
+	## [br]
+	## Returns a list of members returned by each applicable getter (in script, class, instance order), with no duplicate names.
+	## Script and class inheritance is also considered, returning members from inheriting types to those in each base type.
+	static func collect_members(obj: Object, script_getter: StringName, class_getter: StringName, instance_getter: StringName) -> Array:
+		var list: Array = []
+		var name_list: Array[StringName] = []
+
+		# Add members by script
+		var script: Script = obj.get_script()
+		while script != null && script_getter != null:
+			if script.has_method(script_getter):
+				for def in script.call(script_getter):
+					var name: StringName = def["name"]
+					if name_list.has(name):
+						continue
+					name_list.append(name)
+					list.append(def)
+			script = script.get_base_script()
+
+		# Add members by class
+		var cls_name := obj.get_class()
+		while cls_name && class_getter != null:
+			if ClassDB.has_method(class_getter):
+				for def in ClassDB.call(class_getter, cls_name):
+					var name: StringName = def["name"]
+					if name_list.has(name):
+						continue
+					name_list.append(name)
+					list.append(def)
+			cls_name = ClassDB.get_parent_class(cls_name)
+
+		# Add dynamic members for this specific object
+		if instance_getter && obj.has_method(instance_getter):
+			for def in obj.call(instance_getter):
+				var name: StringName = def["name"]
+				if name_list.has(name):
+					continue
+				name_list.append(name)
+				list.append(def)
+
+		return list
+
+
 ## Inner class that handles general [GraphEdit] interface signals
 class InterfaceSignals extends RefCounted:
 	var editor: SceneGraphEditor

@@ -146,7 +146,7 @@ func get_member_selector_member_list(object_type: String, obj: Object, member_ty
 	var members: Array = []
 	match member_type:
 		MEMBER_TYPE_METHOD:
-			members.append_array(_collect_members(obj, &"get_script_method_list", &"class_get_method_list", &"get_method_list"))
+			members.append_array(SceneGraphEditor.Utility.collect_members(obj, &"get_script_method_list", &"class_get_method_list", &"get_method_list"))
 			members = members.map(
 				func(method_info: Dictionary) -> Dictionary:
 					return {
@@ -157,7 +157,7 @@ func get_member_selector_member_list(object_type: String, obj: Object, member_ty
 					}
 			)
 		MEMBER_TYPE_SIGNAL:
-			members.append_array(_collect_members(obj, &"get_script_signal_list", &"class_get_signal_list", &"get_signal_list"))
+			members.append_array(SceneGraphEditor.Utility.collect_members(obj, &"get_script_signal_list", &"class_get_signal_list", &"get_signal_list"))
 			members = members.map(
 				func(signal_info: Dictionary) -> Dictionary:
 					return {
@@ -314,48 +314,6 @@ func _on_connections_changed() -> void:
 		if !is_instance_of(child, SceneObjectGraphNode):
 			continue
 		(child.get_meta(META_NAME_EXTENSION, null) as SceneObjectGraphNodeExtension).update_connection_cache()
-
-
-func _collect_members(obj: Object, script_getter: StringName, class_getter: StringName, instance_getter: StringName) -> Array:
-	var list: Array = []
-	var name_list: Array[StringName] = []
-
-	# Add members by script
-	var script: Script = obj.get_script()
-	while script != null && script_getter != null:
-		if script.has_method(script_getter):
-			for def in script.call(script_getter):
-				var name: StringName = def["name"]
-				if name_list.has(name):
-					continue
-				name_list.append(name)
-				list.append(def)
-		script = script.get_base_script()
-
-	# Add members by class
-	var cls_name := obj.get_class()
-	while cls_name && class_getter != null:
-		if ClassDB.has_method(class_getter):
-			for def in ClassDB.call(class_getter, cls_name):
-				var name: StringName = def["name"]
-				if name_list.has(name):
-					continue
-				name_list.append(name)
-				list.append(def)
-		cls_name = ClassDB.get_parent_class(cls_name)
-
-	# Add dynamic signals and methods for this specific node
-	if instance_getter && obj.has_method(instance_getter):
-		var insertion_index := 0
-		for def in obj.call(instance_getter):
-			var name: StringName = def["name"]
-			if name_list.has(name):
-				continue
-			name_list.append(name)
-			list.insert(insertion_index, def)
-			insertion_index += 1
-
-	return list
 
 
 ### CONNECTION SELECTION

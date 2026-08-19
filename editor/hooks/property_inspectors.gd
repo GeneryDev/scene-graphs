@@ -57,7 +57,7 @@ func get_member_selector_member_list(object_type: String, obj: Object, member_ty
 	var members: Array = []
 	match member_type:
 		MEMBER_TYPE_PROPERTY:
-			members.append_array(_collect_members(obj, &"get_script_property_list", &"class_get_property_list", &"get_property_list"))
+			members.append_array(SceneGraphEditor.Utility.collect_members(obj, &"get_script_property_list", &"class_get_property_list", &"get_property_list"))
 			members = members.filter(_filter_properties_usable)
 			members = members.map(
 				func(property_info: Dictionary) -> Dictionary:
@@ -107,46 +107,6 @@ func _filter_properties_usable(property: Dictionary) -> bool:
 	if (property.usage & PROPERTY_USAGE_SUBGROUP) != 0:
 		return false
 	return true
-
-
-func _collect_members(obj: Object, script_getter: StringName, class_getter: StringName, instance_getter: StringName) -> Array:
-	var list: Array = []
-	var name_list: Array[StringName] = []
-
-	# Add members by script
-	var script: Script = obj.get_script()
-	while script != null && script_getter != null:
-		if script.has_method(script_getter):
-			for def in script.call(script_getter):
-				var name: StringName = def["name"]
-				if name_list.has(name):
-					continue
-				name_list.append(name)
-				list.append(def)
-		script = script.get_base_script()
-
-	# Add members by class
-	var cls_name := obj.get_class()
-	while cls_name && class_getter != null:
-		if ClassDB.has_method(class_getter):
-			for def in ClassDB.call(class_getter, cls_name):
-				var name: StringName = def["name"]
-				if name_list.has(name):
-					continue
-				name_list.append(name)
-				list.append(def)
-		cls_name = ClassDB.get_parent_class(cls_name)
-
-	# Add dynamic properties for this specific node
-	if instance_getter && obj.has_method(instance_getter):
-		for def in obj.call(instance_getter):
-			var name: StringName = def["name"]
-			if name_list.has(name):
-				continue
-			name_list.append(name)
-			list.append(def)
-
-	return list
 
 
 class SceneObjectGraphNodeExtension extends RefCounted:
