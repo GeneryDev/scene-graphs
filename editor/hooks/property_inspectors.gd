@@ -114,11 +114,14 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 	var editor: SceneGraphEditor
 	var hook: Object
 
+	var property_editors: Array[EditorProperty]
+
 
 	func _init(graph_node: GraphNode, editor: SceneGraphEditor, hook: Object) -> void:
 		self.graph_node = graph_node
 		self.editor = editor
 		self.hook = hook
+		EditorInterface.get_inspector().property_edited.connect(_on_property_edited)
 
 
 	func create_object_graph_node_slots() -> Array[Dictionary]:
@@ -141,6 +144,7 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 
 
 	func create_property_slots() -> Array[Dictionary]:
+		property_editors.clear()
 		var created: Array[Dictionary] = []
 		var obj: Object = graph_node.get_object()
 		for property_name in editor.current_view.get_object_view_members(graph_node.object_type, obj, MEMBER_TYPE_PROPERTY):
@@ -184,6 +188,7 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		container.add_child(property_container)
 
 		var property_editor := EditorInspector.instantiate_property_editor(obj, property.type, "", property.hint, property.hint_string, property.usage)
+
 		property_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		property_editor.draw_label = false
 		property_editor.set_object_and_property(obj, property.name)
@@ -204,6 +209,8 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		padding.custom_minimum_size = Vector2(0, 8)
 		container.add_child(padding)
 
+		property_editors.append(property_editor)
+
 		return container
 
 
@@ -211,6 +218,8 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		var undo_redo := EditorInterface.get_editor_undo_redo()
 		undo_redo.create_action("Set " + property, UndoRedo.MERGE_ALL, obj, true)
 		undo_redo.add_do_property(obj, property, value)
+		undo_redo.add_do_method(WeakRefCallable.new(self, &"_on_property_edited"), &"call_ref", property)
+		undo_redo.add_undo_method(WeakRefCallable.new(self, &"_on_property_edited"), &"call_ref", property)
 		undo_redo.add_undo_property(obj, property, obj.get(property))
 		undo_redo.commit_action(true)
 
@@ -227,5 +236,28 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			return control
 
 
+	func _on_property_edited(property: StringName):
+		for property_editor in property_editors:
+			if property_editor.get_edited_property() == property:
+				property_editor.update_property()
+
+
 class Options extends RefCounted:
 	@export var enable_property_inspectors: bool = true
+
+
+class WeakRefCallable extends RefCounted:
+	var target: WeakRef
+	var method: StringName
+
+
+	func _init(target: Object, method: StringName):
+		self.target = weakref(target)
+		self.method = method
+
+
+	func call_ref(...args: Array) -> Variant:
+		var obj = target.get_ref()
+		if obj is Object:
+			return obj.callv(method, args)
+		return null
