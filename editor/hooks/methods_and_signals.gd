@@ -581,14 +581,17 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			if source is Node && !(editor.scene_root != null && (source == editor.scene_root || editor.scene_root.is_ancestor_of(source))):
 				# connected to orphan node, skip;
 				continue
-			if !editor.current_view.has_object_view(OBJECT_TYPE_NODE if source is Node else OBJECT_TYPE_OTHER, source):
-				_connections_not_in_view.append(
-					{
-						"port_type": editor.port_type(&"method"),
-						"member_name": method_name,
-						"other_instance_id": source.get_instance_id(),
-					},
-				)
+			if editor.current_view.has_object_view(OBJECT_TYPE_NODE if source is Node else OBJECT_TYPE_OTHER, source):
+				if editor.current_view.has_object_view_member(OBJECT_TYPE_NODE if source is Node else OBJECT_TYPE_OTHER, source, MEMBER_TYPE_SIGNAL, sgnal.get_name()):
+					continue
+			
+			_connections_not_in_view.append(
+				{
+					"port_type": editor.port_type(&"method"),
+					"member_name": method_name,
+					"other_instance_id": source.get_instance_id(),
+				},
+			)
 
 		for signal_info in obj.get_signal_list():
 			var signal_name := signal_info["name"] as StringName
@@ -600,14 +603,16 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 					continue
 				var callable: Callable = signal_connection.callable
 				var target: Object = callable.get_object()
-				if !editor.current_view.has_object_view(OBJECT_TYPE_NODE if target is Node else OBJECT_TYPE_OTHER, target):
-					_connections_not_in_view.append(
-						{
-							"port_type": editor.port_type(&"signal"),
-							"member_name": signal_name,
-							"other_instance_id": target.get_instance_id(),
-						},
-					)
+				if editor.current_view.has_object_view(OBJECT_TYPE_NODE if target is Node else OBJECT_TYPE_OTHER, target):
+					if editor.current_view.has_object_view_member(OBJECT_TYPE_NODE if target is Node else OBJECT_TYPE_OTHER, target, MEMBER_TYPE_METHOD, callable.get_method()):
+						continue
+				_connections_not_in_view.append(
+					{
+						"port_type": editor.port_type(&"signal"),
+						"member_name": signal_name,
+						"other_instance_id": target.get_instance_id(),
+					},
+				)
 
 		graph_node.queue_redraw()
 
