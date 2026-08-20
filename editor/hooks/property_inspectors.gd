@@ -109,18 +109,22 @@ func _filter_properties_usable(property: Dictionary) -> bool:
 	return true
 
 
-class SceneObjectGraphNodeExtension extends RefCounted:
+class SceneObjectGraphNodeExtension extends Node:
+	const META_NAME_CACHED_VALUE := &"_cached_value"
+
 	var graph_node: GraphNode
 	var editor: SceneGraphEditor
 	var hook: Object
 
 	var property_editors: Array[EditorProperty]
+	var _refresh_countdown: float = 0.33
 
 
 	func _init(graph_node: GraphNode, editor: SceneGraphEditor, hook: Object) -> void:
 		self.graph_node = graph_node
 		self.editor = editor
 		self.hook = hook
+		graph_node.get_titlebar_hbox().add_child(self, INTERNAL_MODE_BACK)
 		EditorInterface.get_inspector().property_edited.connect(_on_property_edited)
 
 
@@ -194,6 +198,7 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 		property_editor.set_object_and_property(obj, property.name)
 		property_editor.selectable = false
 		property_editor.update_property()
+		property_editor.set_meta(META_NAME_CACHED_VALUE, obj.get(property.name))
 		property_container.add_child(property_editor)
 		property_editor.property_changed.connect(_on_property_changed.bind(obj))
 		if (property.usage & PROPERTY_USAGE_ARRAY):
@@ -236,10 +241,28 @@ class SceneObjectGraphNodeExtension extends RefCounted:
 			return control
 
 
-	func _on_property_edited(property: StringName):
+	func _on_property_edited(property: StringName) -> void:
 		for property_editor in property_editors:
 			if property_editor.get_edited_property() == property:
+				var current_value = property_editor.get_edited_object().get(property_editor.get_edited_property())
+				property_editor.set_meta(META_NAME_CACHED_VALUE, current_value)
 				property_editor.update_property()
+
+
+	func _refresh_properties() -> void:
+		for property_editor in property_editors:
+			var current_value = property_editor.get_edited_object().get(property_editor.get_edited_property())
+			if property_editor.get_meta(META_NAME_CACHED_VALUE) != current_value:
+				property_editor.set_meta(META_NAME_CACHED_VALUE, current_value)
+				property_editor.update_property()
+
+
+	func _process(delta: float) -> void:
+		if _refresh_countdown > 0:
+			_refresh_countdown -= delta
+			if _refresh_countdown <= 0:
+				_refresh_countdown = float(EditorInterface.get_editor_settings().get_setting("docks/property_editor/auto_refresh_interval"))
+				_refresh_properties()
 
 
 class Options extends RefCounted:
