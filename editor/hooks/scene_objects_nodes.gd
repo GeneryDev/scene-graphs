@@ -2,16 +2,23 @@
 extends RefCounted
 
 const OBJECT_TYPE_NODE := "node"
+const NODES_OBJECT_SOURCE_HOOK_ID := "scene_graphs:nodes"
 
 static var SceneObjectGraphNode: Script = preload("res://addons/scene-graphs/editor/elements/scene_object_graph_node.gd")
 
 var editor: SceneGraphEditor
 
+var _scene_root_entering_tree := false
 
 func _init(editor: SceneGraphEditor):
 	self.editor = editor
 	editor.selection_changed_with_script.connect(_on_selection_changed_with_script)
 	editor.delete_nodes_request.connect(_on_delete_nodes_request)
+	
+	var tree := EditorInterface.get_editor_viewport_2d().get_tree()
+	tree.node_added.connect(_on_tree_node_added)
+	tree.node_renamed.connect(_on_tree_node_changed)
+	tree.node_removed.connect(_on_tree_node_removed)
 
 
 func get_scene_graph_capabilities() -> Array[String]:
@@ -144,3 +151,59 @@ func _on_selection_changed_with_script(script: Script, nodes: Array[Node]) -> vo
 
 func _map_graph_node_to_object(graph_node: GraphNode) -> Object:
 	return graph_node.get_object()
+
+
+### LIVE UPDATING
+func _on_tree_node_added(node : Node) -> void:
+	# Abort if the node is not part of the edited scene (i.e. some unrelated editor interface control)
+	if !node.is_part_of_edited_scene():
+		return
+
+	var edited_scene := editor.scene_root
+	if node == edited_scene:
+		_scene_root_entering_tree = true
+		set_deferred(&"_scene_root_entering_tree", false)
+
+	# Abort if the edited scene root is in the process of being added to the tree (switching tabs)
+	if _scene_root_entering_tree:
+		return
+
+	print("[%s] Node added: %s" % [edited_scene, node])
+	
+	var later := func() -> void:
+		if _should_include_node_in_view(node):
+			if editor.current_view.add_object_view(OBJECT_TYPE_NODE, node):
+				editor.current_view.update_object_view_members_with_rules(OBJECT_TYPE_NODE, node)
+				editor.current_view.notify_view_updated()
+	later.call_deferred()
+	
+	
+func _should_include_node_in_view(node: Node) -> bool:
+	var object_source_hook : Object = editor.current_view.get_view_rule_hook(NODES_OBJECT_SOURCE_HOOK_ID, "object_source")
+	for rule_entry in editor.current_view.get_view_rules_of_type("object_source"):
+		if rule_entry.id != NODES_OBJECT_SOURCE_HOOK_ID: continue
+		var params = editor.current_view.rule_params_from_dict(object_source_hook, rule_entry["params"])
+		if object_source_hook.should_include_node(node, params):
+			return true
+	return false
+	
+	
+func _on_tree_node_changed(node: Node) -> void:
+	pass
+
+
+func _on_tree_node_removed(node: Node) -> void:
+	# Abort if the node is not part of the edited scene (i.e. some unrelated editor interface control)
+	if !node.is_part_of_edited_scene():
+		return
+
+	# If the edited scene is not inside the tree, it means the editor is in the process of swapping scenes (switching tabs)
+	var edited_scene := editor.scene_root
+	if !edited_scene || !edited_scene.is_inside_tree():
+		return
+	
+	print("[%s] Node removed: %s" % [edited_scene, node])
+	var later := func() -> void:
+		if editor.current_view.remove_object_view(OBJECT_TYPE_NODE, node):
+			editor.current_view.notify_view_updated()
+	later.call_deferred()

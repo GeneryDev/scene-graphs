@@ -81,7 +81,7 @@ func populate_popup_menu(at_position: Vector2, menu: PopupMenu, actions: Diction
 func _update_node_views_with_rules(node: Node, params: Params, objects: Array) -> bool:
 	if !node:
 		return false
-	if !(node == editor.scene_root || node.owner == editor.scene_root):
+	if !should_search_node(node, params):
 		return false
 
 	var any_changes := _update_object_view_with_rules(node, params, objects)
@@ -97,7 +97,7 @@ func _update_object_view_with_rules(node: Node, params: Params, objects: Array) 
 	if !node:
 		return false
 
-	if _should_include_node(node, params):
+	if should_include_node(node, params):
 		objects.append(
 			{
 				"object_type": OBJECT_TYPE_NODE,
@@ -109,8 +109,15 @@ func _update_object_view_with_rules(node: Node, params: Params, objects: Array) 
 		return false
 
 
-func _should_include_node(node: Node, params: Params) -> bool:
+func should_search_node(node: Node, params: Params) -> bool:
+	return node == editor.scene_root || node.owner == editor.scene_root
+
+
+## Function also used by scene_objects_nodes.gd
+func should_include_node(node: Node, params: Params) -> bool:
 	if !node:
+		return false
+	if !should_search_node(node, params):
 		return false
 
 	if params.sub_paths:
