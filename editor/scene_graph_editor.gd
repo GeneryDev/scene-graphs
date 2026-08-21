@@ -484,6 +484,7 @@ class Hooks extends RefCounted:
 
 	func _add_builtin_hooks() -> void:
 		add_hook(load("res://addons/scene-graphs/editor/hooks/scene_objects.gd"))
+		add_hook(load("res://addons/scene-graphs/editor/hooks/scene_objects_nodes.gd"))
 		add_hook(load("res://addons/scene-graphs/editor/hooks/methods_and_signals.gd"))
 		add_hook(load("res://addons/scene-graphs/editor/hooks/node_references.gd"))
 		add_hook(load("res://addons/scene-graphs/editor/hooks/property_inspectors.gd"))
